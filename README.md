@@ -120,6 +120,55 @@ Example output:
 This is useful for automation, CI workflows, or future integrations.
 
 
+### Branch comparison mode
+
+By default, PR Risk Lens analyzes local working tree changes:
+
+```powershell
+pr-risk-lens analyze
+```
+
+This is useful before committing your local changes.
+
+To analyze the current branch against a base branch, use:
+
+```powershell
+pr-risk-lens analyze --base main
+```
+
+This compares the current branch against `main`, which is closer to how a Pull Request is reviewed.
+
+Example:
+
+```text
+PR Risk Lens
+Transparent risk scoring for Python pull requests.
+
+Mode: branch comparison against main
+
+Changed files:
+- src/payment.py
+- tests/test_payment.py
+
+Diff stats:
+Lines added: 80
+Lines deleted: 12
+
+Tests:
+Test files changed: Yes
+- tests/test_payment.py
+
+Risk:
+Risk score: 30/100
+Risk level: Low
+
+Risk factors:
+- Change size: 92 changed lines (+25)
+- Files changed: 2 files (+5)
+```
+
+Use this mode when you are working on a feature branch and want to compare it with the main branch before opening a Pull Request.
+
 ## Risk scoring rules
 
 The current score is intentionally simple and transparent.
