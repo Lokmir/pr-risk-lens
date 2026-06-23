@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Any
 
 from pr_risk_lens.git import DiffStat
@@ -19,6 +20,7 @@ class RiskFactor:
 @dataclass(frozen=True)
 class RiskReport:
     changed_files: list[str]
+    test_files: list[str]
     total_additions: int
     total_deletions: int
     risk_score: int
@@ -30,12 +32,20 @@ class RiskReport:
         return bool(self.changed_files)
 
     @property
+    def has_test_changes(self) -> bool:
+        return bool(self.test_files)
+
+    @property
     def total_changed_lines(self) -> int:
         return self.total_additions + self.total_deletions
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "changed_files": self.changed_files,
+            "test_changes": {
+                "has_test_changes": self.has_test_changes,
+                "test_files": self.test_files,
+            },
             "diff_stats": {
                 "lines_added": self.total_additions,
                 "lines_deleted": self.total_deletions,
@@ -66,15 +76,29 @@ def build_risk_report(
     total_deletions = sum(stat.deletions for stat in diff_stats)
     total_changed_lines = total_additions + total_deletions
 
+    test_files = [
+        file_path
+        for file_path in changed_files
+        if _is_test_file(file_path)
+    ]
+
+    has_python_source_changes = any(
+        _is_python_source_file(file_path)
+        for file_path in changed_files
+    )
+
     risk_factors = _build_risk_factors(
         changed_file_count=len(changed_files),
         total_changed_lines=total_changed_lines,
+        has_python_source_changes=has_python_source_changes,
+        has_test_changes=bool(test_files),
     )
 
     risk_score = sum(factor.points for factor in risk_factors)
 
     return RiskReport(
         changed_files=changed_files,
+        test_files=test_files,
         total_additions=total_additions,
         total_deletions=total_deletions,
         risk_score=risk_score,
@@ -86,6 +110,8 @@ def build_risk_report(
 def _build_risk_factors(
     changed_file_count: int,
     total_changed_lines: int,
+    has_python_source_changes: bool,
+    has_test_changes: bool,
 ) -> list[RiskFactor]:
     factors: list[RiskFactor] = []
 
@@ -94,6 +120,14 @@ def _build_risk_factors(
 
     factors.append(_change_size_factor(total_changed_lines))
     factors.append(_changed_files_factor(changed_file_count))
+
+    if has_python_source_changes and not has_test_changes:
+        factors.append(
+            RiskFactor(
+                label="No test changes detected for Python code changes",
+                points=10,
+            )
+        )
 
     return factors
 
@@ -133,6 +167,21 @@ def _changed_files_factor(changed_file_count: int) -> RiskFactor:
     return RiskFactor(
         label=f"Files changed: {changed_file_count} files",
         points=25,
+    )
+
+
+def _is_python_source_file(file_path: str) -> bool:
+    return file_path.endswith(".py") and not _is_test_file(file_path)
+
+
+def _is_test_file(file_path: str) -> bool:
+    path = PurePosixPath(file_path.replace("\\", "/"))
+    file_name = path.name
+
+    return (
+        "tests" in path.parts
+        or file_name.startswith("test_")
+        or file_name.endswith("_test.py")
     )
 
 

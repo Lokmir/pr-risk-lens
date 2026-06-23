@@ -68,6 +68,15 @@ def _print_text_report(report: RiskReport) -> None:
     console.print(f"Lines deleted: {report.total_deletions}")
 
     console.print()
+    console.print("[bold]Tests:[/bold]")
+    console.print(
+        f"Test files changed: {'Yes' if report.has_test_changes else 'No'}"
+    )
+
+    for file_path in report.test_files:
+        console.print(f"- {file_path}")
+
+    console.print()
     console.print("[bold]Risk:[/bold]")
     console.print(f"Risk score: {report.risk_score}/100")
     console.print(f"Risk level: {report.risk_level}")

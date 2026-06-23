@@ -13,13 +13,18 @@ def test_build_risk_report_computes_totals() -> None:
 
     assert report == RiskReport(
         changed_files=["README.md", "src/pr_risk_lens/cli.py"],
+        test_files=[],
         total_additions=15,
         total_deletions=3,
-        risk_score=15,
+        risk_score=25,
         risk_level="Low",
         risk_factors=[
             RiskFactor(label="Change size: 18 changed lines", points=10),
             RiskFactor(label="Files changed: 2 files", points=5),
+            RiskFactor(
+                label="No test changes detected for Python code changes",
+                points=10,
+            ),
         ],
     )
 
@@ -27,6 +32,7 @@ def test_build_risk_report_computes_totals() -> None:
 def test_risk_report_knows_if_it_has_changes() -> None:
     report = RiskReport(
         changed_files=[],
+        test_files=[],
         total_additions=0,
         total_deletions=0,
         risk_score=0,
@@ -35,7 +41,29 @@ def test_risk_report_knows_if_it_has_changes() -> None:
     )
 
     assert report.has_changes is False
+    assert report.has_test_changes is False
     assert report.total_changed_lines == 0
+
+
+def test_build_risk_report_detects_test_changes() -> None:
+    report = build_risk_report(
+        changed_files=[
+            "src/pr_risk_lens/cli.py",
+            "tests/test_cli.py",
+        ],
+        diff_stats=[
+            DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
+            DiffStat(file_path="tests/test_cli.py", additions=20, deletions=3),
+        ],
+    )
+
+    assert report.has_test_changes is True
+    assert report.test_files == ["tests/test_cli.py"]
+    assert report.risk_score == 15
+    assert report.risk_factors == [
+        RiskFactor(label="Change size: 35 changed lines", points=10),
+        RiskFactor(label="Files changed: 2 files", points=5),
+    ]
 
 
 def test_build_risk_report_returns_medium_risk_for_medium_change() -> None:
@@ -51,11 +79,15 @@ def test_build_risk_report_returns_medium_risk_for_medium_change() -> None:
         ],
     )
 
-    assert report.risk_score == 40
+    assert report.risk_score == 50
     assert report.risk_level == "Medium"
     assert report.risk_factors == [
         RiskFactor(label="Change size: 100 changed lines", points=25),
         RiskFactor(label="Files changed: 4 files", points=15),
+        RiskFactor(
+            label="No test changes detected for Python code changes",
+            points=10,
+        ),
     ]
 
 
@@ -67,24 +99,30 @@ def test_build_risk_report_returns_high_risk_for_large_change() -> None:
         ],
     )
 
-    assert report.risk_score == 65
+    assert report.risk_score == 75
     assert report.risk_level == "High"
+
 
 def test_risk_report_can_be_converted_to_dict() -> None:
     report = RiskReport(
-        changed_files=["README.md"],
+        changed_files=["README.md", "tests/test_readme.py"],
+        test_files=["tests/test_readme.py"],
         total_additions=5,
         total_deletions=2,
         risk_score=15,
         risk_level="Low",
         risk_factors=[
             RiskFactor(label="Change size: 7 changed lines", points=10),
-            RiskFactor(label="Files changed: 1 files", points=5),
+            RiskFactor(label="Files changed: 2 files", points=5),
         ],
     )
 
     assert report.to_dict() == {
-        "changed_files": ["README.md"],
+        "changed_files": ["README.md", "tests/test_readme.py"],
+        "test_changes": {
+            "has_test_changes": True,
+            "test_files": ["tests/test_readme.py"],
+        },
         "diff_stats": {
             "lines_added": 5,
             "lines_deleted": 2,
@@ -99,7 +137,7 @@ def test_risk_report_can_be_converted_to_dict() -> None:
                     "points": 10,
                 },
                 {
-                    "label": "Files changed: 1 files",
+                    "label": "Files changed: 2 files",
                     "points": 5,
                 },
             ],
