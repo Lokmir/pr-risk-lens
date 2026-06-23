@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 import subprocess
 
 
@@ -38,28 +39,22 @@ def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
     Return line-level diff statistics.
 
     Without base_ref:
-        compare local changes against HEAD using:
-            git diff --numstat HEAD
+        compare local tracked changes against HEAD and also count untracked files.
 
     With base_ref:
         compare the current branch against the base reference using:
             git diff --numstat <base_ref>...HEAD
     """
     if base_ref:
-        command = ["git", "diff", "--numstat", f"{base_ref}...HEAD"]
-    else:
-        command = ["git", "diff", "--numstat", "HEAD"]
+        return _get_diff_stats_against_base(base_ref)
 
-    result = _run_git(command)
+    tracked_stats = _get_tracked_diff_stats_from_working_tree()
+    untracked_stats = [
+        _build_untracked_file_stat(file_path)
+        for file_path in _get_untracked_files()
+    ]
 
-    stats: list[DiffStat] = []
-
-    for line in result.stdout.splitlines():
-        stat = _parse_numstat_line(line)
-        if stat:
-            stats.append(stat)
-
-    return stats
+    return tracked_stats + untracked_stats
 
 
 def _get_changed_files_from_working_tree() -> list[str]:
@@ -81,6 +76,52 @@ def _get_changed_files_against_base(base_ref: str) -> list[str]:
     )
 
     return result.stdout.splitlines()
+
+
+def _get_tracked_diff_stats_from_working_tree() -> list[DiffStat]:
+    result = _run_git(["git", "diff", "--numstat", "HEAD"])
+
+    return _parse_numstat_output(result.stdout)
+
+
+def _get_diff_stats_against_base(base_ref: str) -> list[DiffStat]:
+    result = _run_git(
+        ["git", "diff", "--numstat", f"{base_ref}...HEAD"]
+    )
+
+    return _parse_numstat_output(result.stdout)
+
+
+def _get_untracked_files() -> list[str]:
+    result = _run_git(
+        ["git", "ls-files", "--others", "--exclude-standard"]
+    )
+
+    return result.stdout.splitlines()
+
+
+def _build_untracked_file_stat(file_path: str) -> DiffStat:
+    return DiffStat(
+        file_path=file_path,
+        additions=_count_file_lines(file_path),
+        deletions=0,
+    )
+
+
+def _count_file_lines(file_path: str) -> int:
+    path = Path(file_path)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return 0
+    except OSError:
+        return 0
+
+    if not content:
+        return 0
+
+    return len(content.splitlines())
 
 
 def _run_git(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -126,6 +167,17 @@ def _parse_porcelain_line(line: str) -> str:
         "A  src/example.py"
     """
     return line[3:]
+
+
+def _parse_numstat_output(output: str) -> list[DiffStat]:
+    stats: list[DiffStat] = []
+
+    for line in output.splitlines():
+        stat = _parse_numstat_line(line)
+        if stat:
+            stats.append(stat)
+
+    return stats
 
 
 def _parse_numstat_line(line: str) -> DiffStat | None:

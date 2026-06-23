@@ -1,7 +1,13 @@
 import subprocess
+
 import pytest
 
-from pr_risk_lens.git import DiffStat, GitCommandError, get_changed_files, get_diff_stats
+from pr_risk_lens.git import (
+    DiffStat,
+    GitCommandError,
+    get_changed_files,
+    get_diff_stats,
+)
 
 
 def test_get_changed_files_returns_git_status_output(monkeypatch) -> None:
@@ -46,15 +52,28 @@ def test_get_changed_files_returns_empty_list_when_no_changes(monkeypatch) -> No
 
 def test_get_diff_stats_returns_git_numstat_output(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(
-            args=["git", "diff", "--numstat", "HEAD"],
-            returncode=0,
-            stdout=(
-                "5\t2\tREADME.md\n"
-                "12\t0\tsrc/pr_risk_lens/git.py\n"
-            ),
-            stderr="",
-        )
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout=(
+                    "5\t2\tREADME.md\n"
+                    "12\t0\tsrc/pr_risk_lens/git.py\n"
+                ),
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -68,12 +87,25 @@ def test_get_diff_stats_returns_git_numstat_output(monkeypatch) -> None:
 
 def test_get_diff_stats_handles_binary_files(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
-        return subprocess.CompletedProcess(
-            args=["git", "diff", "--numstat", "HEAD"],
-            returncode=0,
-            stdout="-\t-\timage.png\n",
-            stderr="",
-        )
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="-\t-\timage.png\n",
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
@@ -82,6 +114,7 @@ def test_get_diff_stats_handles_binary_files(monkeypatch) -> None:
     assert diff_stats == [
         DiffStat(file_path="image.png", additions=0, deletions=0),
     ]
+
 
 def test_get_changed_files_can_compare_against_base(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
@@ -123,6 +156,7 @@ def test_get_diff_stats_can_compare_against_base(monkeypatch) -> None:
         DiffStat(file_path="README.md", additions=5, deletions=2),
     ]
 
+
 def test_get_changed_files_raises_clear_error_when_git_is_missing(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
         raise FileNotFoundError()
@@ -156,7 +190,10 @@ def test_get_changed_files_raises_clear_error_for_unknown_base_ref(monkeypatch) 
         raise subprocess.CalledProcessError(
             returncode=128,
             cmd=["git", "diff", "--name-only", "unknown...HEAD"],
-            stderr="fatal: ambiguous argument 'unknown...HEAD': unknown revision or path not in the working tree.",
+            stderr=(
+                "fatal: ambiguous argument 'unknown...HEAD': "
+                "unknown revision or path not in the working tree."
+            ),
         )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -164,4 +201,48 @@ def test_get_changed_files_raises_clear_error_for_unknown_base_ref(monkeypatch) 
     with pytest.raises(GitCommandError) as error:
         get_changed_files(base_ref="unknown")
 
-    assert str(error.value) == "Git reference not found. Check the branch or base ref name."
+    assert str(error.value) == (
+        "Git reference not found. Check the branch or base ref name."
+    )
+
+
+def test_get_diff_stats_counts_untracked_file_lines(monkeypatch, tmp_path) -> None:
+    untracked_file = tmp_path / "new_module.py"
+    untracked_file.write_text(
+        "def hello():\n"
+        "    return 'hello'\n"
+        "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(*args, **kwargs):
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="5\t2\tREADME.md\n",
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="new_module.py\n",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats()
+
+    assert diff_stats == [
+        DiffStat(file_path="README.md", additions=5, deletions=2),
+        DiffStat(file_path="new_module.py", additions=3, deletions=0),
+    ]
