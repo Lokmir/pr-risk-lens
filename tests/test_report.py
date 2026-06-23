@@ -14,6 +14,7 @@ def test_build_risk_report_computes_totals() -> None:
     assert report == RiskReport(
         changed_files=["README.md", "src/pr_risk_lens/cli.py"],
         test_files=[],
+        sensitive_files=[],
         total_additions=15,
         total_deletions=3,
         risk_score=25,
@@ -33,6 +34,7 @@ def test_risk_report_knows_if_it_has_changes() -> None:
     report = RiskReport(
         changed_files=[],
         test_files=[],
+        sensitive_files=[],
         total_additions=0,
         total_deletions=0,
         risk_score=0,
@@ -42,6 +44,7 @@ def test_risk_report_knows_if_it_has_changes() -> None:
 
     assert report.has_changes is False
     assert report.has_test_changes is False
+    assert report.has_sensitive_changes is False
     assert report.total_changed_lines == 0
 
 
@@ -63,6 +66,35 @@ def test_build_risk_report_detects_test_changes() -> None:
     assert report.risk_factors == [
         RiskFactor(label="Change size: 35 changed lines", points=10),
         RiskFactor(label="Files changed: 2 files", points=5),
+    ]
+
+
+def test_build_risk_report_detects_sensitive_files() -> None:
+    report = build_risk_report(
+        changed_files=[
+            "pyproject.toml",
+            ".github/workflows/tests.yml",
+            "src/pr_risk_lens/cli.py",
+            "tests/test_cli.py",
+        ],
+        diff_stats=[
+            DiffStat(file_path="pyproject.toml", additions=2, deletions=1),
+            DiffStat(file_path=".github/workflows/tests.yml", additions=4, deletions=0),
+            DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
+            DiffStat(file_path="tests/test_cli.py", additions=5, deletions=0),
+        ],
+    )
+
+    assert report.has_sensitive_changes is True
+    assert report.sensitive_files == [
+        "pyproject.toml",
+        ".github/workflows/tests.yml",
+    ]
+    assert report.risk_score == 35
+    assert report.risk_factors == [
+        RiskFactor(label="Change size: 24 changed lines", points=10),
+        RiskFactor(label="Files changed: 4 files", points=15),
+        RiskFactor(label="Risk-sensitive files changed", points=10),
     ]
 
 
@@ -105,23 +137,29 @@ def test_build_risk_report_returns_high_risk_for_large_change() -> None:
 
 def test_risk_report_can_be_converted_to_dict() -> None:
     report = RiskReport(
-        changed_files=["README.md", "tests/test_readme.py"],
+        changed_files=["README.md", "tests/test_readme.py", "pyproject.toml"],
         test_files=["tests/test_readme.py"],
+        sensitive_files=["pyproject.toml"],
         total_additions=5,
         total_deletions=2,
-        risk_score=15,
+        risk_score=25,
         risk_level="Low",
         risk_factors=[
             RiskFactor(label="Change size: 7 changed lines", points=10),
-            RiskFactor(label="Files changed: 2 files", points=5),
+            RiskFactor(label="Files changed: 3 files", points=5),
+            RiskFactor(label="Risk-sensitive files changed", points=10),
         ],
     )
 
     assert report.to_dict() == {
-        "changed_files": ["README.md", "tests/test_readme.py"],
+        "changed_files": ["README.md", "tests/test_readme.py", "pyproject.toml"],
         "test_changes": {
             "has_test_changes": True,
             "test_files": ["tests/test_readme.py"],
+        },
+        "sensitive_changes": {
+            "has_sensitive_changes": True,
+            "sensitive_files": ["pyproject.toml"],
         },
         "diff_stats": {
             "lines_added": 5,
@@ -129,7 +167,7 @@ def test_risk_report_can_be_converted_to_dict() -> None:
             "total_changed_lines": 7,
         },
         "risk": {
-            "score": 15,
+            "score": 25,
             "level": "Low",
             "factors": [
                 {
@@ -137,8 +175,12 @@ def test_risk_report_can_be_converted_to_dict() -> None:
                     "points": 10,
                 },
                 {
-                    "label": "Files changed: 2 files",
+                    "label": "Files changed: 3 files",
                     "points": 5,
+                },
+                {
+                    "label": "Risk-sensitive files changed",
+                    "points": 10,
                 },
             ],
         },

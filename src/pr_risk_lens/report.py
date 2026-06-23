@@ -21,6 +21,7 @@ class RiskFactor:
 class RiskReport:
     changed_files: list[str]
     test_files: list[str]
+    sensitive_files: list[str]
     total_additions: int
     total_deletions: int
     risk_score: int
@@ -36,6 +37,10 @@ class RiskReport:
         return bool(self.test_files)
 
     @property
+    def has_sensitive_changes(self) -> bool:
+        return bool(self.sensitive_files)
+
+    @property
     def total_changed_lines(self) -> int:
         return self.total_additions + self.total_deletions
 
@@ -45,6 +50,10 @@ class RiskReport:
             "test_changes": {
                 "has_test_changes": self.has_test_changes,
                 "test_files": self.test_files,
+            },
+            "sensitive_changes": {
+                "has_sensitive_changes": self.has_sensitive_changes,
+                "sensitive_files": self.sensitive_files,
             },
             "diff_stats": {
                 "lines_added": self.total_additions,
@@ -82,6 +91,12 @@ def build_risk_report(
         if _is_test_file(file_path)
     ]
 
+    sensitive_files = [
+        file_path
+        for file_path in changed_files
+        if _is_sensitive_file(file_path)
+    ]
+
     has_python_source_changes = any(
         _is_python_source_file(file_path)
         for file_path in changed_files
@@ -92,6 +107,7 @@ def build_risk_report(
         total_changed_lines=total_changed_lines,
         has_python_source_changes=has_python_source_changes,
         has_test_changes=bool(test_files),
+        has_sensitive_changes=bool(sensitive_files),
     )
 
     risk_score = sum(factor.points for factor in risk_factors)
@@ -99,6 +115,7 @@ def build_risk_report(
     return RiskReport(
         changed_files=changed_files,
         test_files=test_files,
+        sensitive_files=sensitive_files,
         total_additions=total_additions,
         total_deletions=total_deletions,
         risk_score=risk_score,
@@ -112,6 +129,7 @@ def _build_risk_factors(
     total_changed_lines: int,
     has_python_source_changes: bool,
     has_test_changes: bool,
+    has_sensitive_changes: bool,
 ) -> list[RiskFactor]:
     factors: list[RiskFactor] = []
 
@@ -125,6 +143,14 @@ def _build_risk_factors(
         factors.append(
             RiskFactor(
                 label="No test changes detected for Python code changes",
+                points=10,
+            )
+        )
+
+    if has_sensitive_changes:
+        factors.append(
+            RiskFactor(
+                label="Risk-sensitive files changed",
                 points=10,
             )
         )
@@ -183,6 +209,31 @@ def _is_test_file(file_path: str) -> bool:
         or file_name.startswith("test_")
         or file_name.endswith("_test.py")
     )
+
+
+def _is_sensitive_file(file_path: str) -> bool:
+    path = PurePosixPath(file_path.replace("\\", "/"))
+    file_name = path.name
+
+    sensitive_file_names = {
+        "pyproject.toml",
+        "requirements.txt",
+        "requirements-dev.txt",
+        "setup.py",
+        "setup.cfg",
+        "tox.ini",
+        "Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+    }
+
+    if file_name in sensitive_file_names:
+        return True
+
+    if len(path.parts) >= 3 and path.parts[0] == ".github" and path.parts[1] == "workflows":
+        return file_name.endswith((".yml", ".yaml"))
+
+    return False
 
 
 def _risk_level_from_score(score: int) -> str:

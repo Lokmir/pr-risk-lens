@@ -89,6 +89,15 @@ def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
         console.print(f"- {file_path}")
 
     console.print()
+    console.print("[bold]Sensitive files:[/bold]")
+    console.print(
+        f"Sensitive files changed: {'Yes' if report.has_sensitive_changes else 'No'}"
+    )
+
+    for file_path in report.sensitive_files:
+        console.print(f"- {file_path}")
+
+    console.print()
     console.print("[bold]Risk:[/bold]")
     console.print(f"Risk score: {report.risk_score}/100")
     console.print(f"Risk level: {report.risk_level}")

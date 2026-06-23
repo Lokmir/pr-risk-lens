@@ -62,6 +62,7 @@ def test_analyze_command_displays_changed_files(monkeypatch) -> None:
     assert "Lines added: 20" in result.output
     assert "Lines deleted: 3" in result.output
     assert "Test files changed: Yes" in result.output
+    assert "Sensitive files changed: No" in result.output
     assert "Risk score: 15/100" in result.output
     assert "Risk level: Low" in result.output
     assert "Change size: 23 changed lines (+10)" in result.output
@@ -96,6 +97,8 @@ def test_analyze_command_can_output_json(monkeypatch) -> None:
     assert data["changed_files"] == ["README.md", "tests/test_readme.py"]
     assert data["test_changes"]["has_test_changes"] is True
     assert data["test_changes"]["test_files"] == ["tests/test_readme.py"]
+    assert data["sensitive_changes"]["has_sensitive_changes"] is False
+    assert data["sensitive_changes"]["sensitive_files"] == []
     assert data["diff_stats"]["lines_added"] == 8
     assert data["diff_stats"]["lines_deleted"] == 3
     assert data["diff_stats"]["total_changed_lines"] == 11
@@ -130,3 +133,31 @@ def test_analyze_command_accepts_base_option(monkeypatch) -> None:
     assert result.exit_code == 0
     assert "Mode: branch comparison against main" in result.output
     assert seen_base_refs == ["main", "main"]
+
+
+def test_analyze_command_displays_sensitive_files(monkeypatch) -> None:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return ["pyproject.toml", "src/pr_risk_lens/cli.py", "tests/test_cli.py"]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [
+            DiffStat(file_path="pyproject.toml", additions=2, deletions=1),
+            DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=1),
+            DiffStat(file_path="tests/test_cli.py", additions=5, deletions=0),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze"])
+
+    assert result.exit_code == 0
+    assert "Sensitive files changed: Yes" in result.output
+    assert "pyproject.toml" in result.output
+    assert "Risk-sensitive files changed (+10)" in result.output
