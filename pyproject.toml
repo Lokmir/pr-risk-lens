@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pr-risk-lens"
+version = "0.1.0"
+description = "Transparent risk scoring for Python pull requests."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "typer",
+    "rich",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+pr-risk-lens = "pr_risk_lens.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pr_risk_lens"]
