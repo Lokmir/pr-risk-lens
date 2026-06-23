@@ -395,3 +395,77 @@ def test_get_diff_stats_uses_destination_path_for_braced_rename(monkeypatch) -> 
     assert diff_stats == [
         DiffStat(file_path="src/new_name.py", additions=0, deletions=0),
     ]
+
+def test_get_diff_stats_counts_binary_untracked_file_as_zero_lines(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    binary_file = tmp_path / "image.png"
+    binary_file.write_bytes(b"\xff\xfe\x00\x00")
+
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(*args, **kwargs):
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="image.png\n",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats()
+
+    assert diff_stats == [
+        DiffStat(file_path="image.png", additions=0, deletions=0),
+    ]
+
+
+def test_get_diff_stats_counts_missing_untracked_file_as_zero_lines(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    def fake_run(*args, **kwargs):
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="missing_file.py\n",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats()
+
+    assert diff_stats == [
+        DiffStat(file_path="missing_file.py", additions=0, deletions=0),
+    ]
