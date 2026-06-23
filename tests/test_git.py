@@ -81,3 +81,43 @@ def test_get_diff_stats_handles_binary_files(monkeypatch) -> None:
     assert diff_stats == [
         DiffStat(file_path="image.png", additions=0, deletions=0),
     ]
+
+def test_get_changed_files_can_compare_against_base(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        assert args[0] == ["git", "diff", "--name-only", "main...HEAD"]
+
+        return subprocess.CompletedProcess(
+            args=["git", "diff", "--name-only", "main...HEAD"],
+            returncode=0,
+            stdout="README.md\nsrc/pr_risk_lens/cli.py\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    changed_files = get_changed_files(base_ref="main")
+
+    assert changed_files == [
+        "README.md",
+        "src/pr_risk_lens/cli.py",
+    ]
+
+
+def test_get_diff_stats_can_compare_against_base(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        assert args[0] == ["git", "diff", "--numstat", "main...HEAD"]
+
+        return subprocess.CompletedProcess(
+            args=["git", "diff", "--numstat", "main...HEAD"],
+            returncode=0,
+            stdout="5\t2\tREADME.md\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats(base_ref="main")
+
+    assert diff_stats == [
+        DiffStat(file_path="README.md", additions=5, deletions=2),
+    ]

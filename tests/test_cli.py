@@ -9,10 +9,10 @@ runner = CliRunner()
 
 
 def test_analyze_command_displays_project_name(monkeypatch) -> None:
-    def fake_get_changed_files() -> list[str]:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
         return []
 
-    def fake_get_diff_stats() -> list[DiffStat]:
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
         return []
 
     monkeypatch.setattr(
@@ -28,14 +28,15 @@ def test_analyze_command_displays_project_name(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert "PR Risk Lens" in result.output
+    assert "Mode: local working tree" in result.output
     assert "No changed files detected." in result.output
 
 
 def test_analyze_command_displays_changed_files(monkeypatch) -> None:
-    def fake_get_changed_files() -> list[str]:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
         return ["README.md", "src/pr_risk_lens/cli.py", "tests/test_cli.py"]
 
-    def fake_get_diff_stats() -> list[DiffStat]:
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
         return [
             DiffStat(file_path="README.md", additions=5, deletions=2),
             DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=1),
@@ -68,10 +69,10 @@ def test_analyze_command_displays_changed_files(monkeypatch) -> None:
 
 
 def test_analyze_command_can_output_json(monkeypatch) -> None:
-    def fake_get_changed_files() -> list[str]:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
         return ["README.md", "tests/test_readme.py"]
 
-    def fake_get_diff_stats() -> list[DiffStat]:
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
         return [
             DiffStat(file_path="README.md", additions=5, deletions=2),
             DiffStat(file_path="tests/test_readme.py", additions=3, deletions=1),
@@ -100,3 +101,32 @@ def test_analyze_command_can_output_json(monkeypatch) -> None:
     assert data["diff_stats"]["total_changed_lines"] == 11
     assert data["risk"]["score"] == 15
     assert data["risk"]["level"] == "Low"
+
+
+def test_analyze_command_accepts_base_option(monkeypatch) -> None:
+    seen_base_refs: list[str | None] = []
+
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        seen_base_refs.append(base_ref)
+        return ["src/pr_risk_lens/cli.py"]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        seen_base_refs.append(base_ref)
+        return [
+            DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze", "--base", "main"])
+
+    assert result.exit_code == 0
+    assert "Mode: branch comparison against main" in result.output
+    assert seen_base_refs == ["main", "main"]

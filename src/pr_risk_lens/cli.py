@@ -24,6 +24,11 @@ def main() -> None:
 
 @app.command()
 def analyze(
+    base: str | None = typer.Option(
+        None,
+        "--base",
+        help="Compare the current branch against a base ref, for example main.",
+    ),
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -33,24 +38,31 @@ def analyze(
     """
     Analyze Git changes and print a risk report.
     """
-    changed_files = get_changed_files()
-    diff_stats = get_diff_stats()
+    changed_files = get_changed_files(base_ref=base)
+    diff_stats = get_diff_stats(base_ref=base)
     report = build_risk_report(changed_files, diff_stats)
 
     if json_output:
         _print_json_report(report)
         return
 
-    _print_text_report(report)
+    _print_text_report(report, base_ref=base)
 
 
 def _print_json_report(report: RiskReport) -> None:
     console.print(json.dumps(report.to_dict(), indent=2))
 
 
-def _print_text_report(report: RiskReport) -> None:
+def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
     console.print("[bold]PR Risk Lens[/bold]")
     console.print("Transparent risk scoring for Python pull requests.")
+    console.print()
+
+    if base_ref:
+        console.print(f"Mode: branch comparison against {base_ref}")
+    else:
+        console.print("Mode: local working tree")
+
     console.print()
 
     if not report.has_changes:

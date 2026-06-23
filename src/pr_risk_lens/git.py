@@ -9,19 +9,59 @@ class DiffStat:
     deletions: int
 
 
-def get_changed_files() -> list[str]:
+def get_changed_files(base_ref: str | None = None) -> list[str]:
     """
-    Return the list of changed files in the current Git working tree.
+    Return the list of changed files.
 
-    This uses:
-        git status --porcelain
+    Without base_ref:
+        detect local working tree changes using:
+            git status --porcelain
 
-    It detects:
-    - modified files
-    - added files
-    - deleted files
-    - untracked files
+    With base_ref:
+        compare the current branch against the base reference using:
+            git diff --name-only <base_ref>...HEAD
     """
+    if base_ref:
+        return _get_changed_files_against_base(base_ref)
+
+    return _get_changed_files_from_working_tree()
+
+
+def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+    """
+    Return line-level diff statistics.
+
+    Without base_ref:
+        compare local changes against HEAD using:
+            git diff --numstat HEAD
+
+    With base_ref:
+        compare the current branch against the base reference using:
+            git diff --numstat <base_ref>...HEAD
+    """
+    if base_ref:
+        command = ["git", "diff", "--numstat", f"{base_ref}...HEAD"]
+    else:
+        command = ["git", "diff", "--numstat", "HEAD"]
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    stats: list[DiffStat] = []
+
+    for line in result.stdout.splitlines():
+        stat = _parse_numstat_line(line)
+        if stat:
+            stats.append(stat)
+
+    return stats
+
+
+def _get_changed_files_from_working_tree() -> list[str]:
     result = subprocess.run(
         ["git", "status", "--porcelain"],
         capture_output=True,
@@ -39,30 +79,15 @@ def get_changed_files() -> list[str]:
     return changed_files
 
 
-def get_diff_stats() -> list[DiffStat]:
-    """
-    Return line-level diff statistics for tracked files.
-
-    This uses:
-        git diff --numstat HEAD
-
-    It detects lines added and deleted compared to the last commit.
-    """
+def _get_changed_files_against_base(base_ref: str) -> list[str]:
     result = subprocess.run(
-        ["git", "diff", "--numstat", "HEAD"],
+        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
         capture_output=True,
         text=True,
         check=True,
     )
 
-    stats: list[DiffStat] = []
-
-    for line in result.stdout.splitlines():
-        stat = _parse_numstat_line(line)
-        if stat:
-            stats.append(stat)
-
-    return stats
+    return result.stdout.splitlines()
 
 
 def _parse_porcelain_line(line: str) -> str:
@@ -79,7 +104,7 @@ def _parse_porcelain_line(line: str) -> str:
 
 def _parse_numstat_line(line: str) -> DiffStat | None:
     """
-    Extract line statistics from one line of 'git diff --numstat HEAD'.
+    Extract line statistics from one line of 'git diff --numstat'.
 
     Example line:
         "5\t2\tREADME.md"
