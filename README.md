@@ -148,6 +148,7 @@ Risk level: High
 
 Risk score 75 exceeds max score 60.
 ```
+
 ## CI example
 
 PR Risk Lens can be used in GitHub Actions to fail a pull request when the risk score is above a chosen threshold.
@@ -188,7 +189,7 @@ In this example:
 
 * `--base origin/main` compares the pull request branch against the main branch;
 * `--max-score 60` fails the workflow if the risk score is greater than `60`;
-* `fetch-depth: 0` ensures Git has enough history to compare branches correctly.
+* `fetch-depth: 0` gives Git enough history to compare branches correctly.
 
 ## Risk scoring
 
@@ -322,3 +323,7 @@ PR Risk Lens should stay:
 * understandable without AI or external services.
 
 AI may be explored later, but the MVP is deliberately deterministic and rule-based.
+
+## License
+
+This project is licensed under the MIT License.
