@@ -16,6 +16,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "ruff",
 ]
 
 [project.scripts]
@@ -23,3 +24,17 @@ pr-risk-lens = "pr_risk_lens.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pr_risk_lens"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+]

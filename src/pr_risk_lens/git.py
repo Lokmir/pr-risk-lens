@@ -1,6 +1,6 @@
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 
 
 @dataclass(frozen=True)
@@ -54,8 +54,7 @@ def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
 
     tracked_stats = _get_tracked_diff_stats_from_working_tree()
     untracked_stats = [
-        _build_untracked_file_stat(file_path)
-        for file_path in _get_untracked_files()
+        _build_untracked_file_stat(file_path) for file_path in _get_untracked_files()
     ]
 
     return _merge_and_sort_diff_stats(tracked_stats + untracked_stats)
@@ -93,15 +92,11 @@ def _get_diff_stats_against_base(base_ref: str) -> list[DiffStat]:
         ["git", "diff", "--numstat", "--find-renames", f"{base_ref}...HEAD"]
     )
 
-    return _merge_and_sort_diff_stats(
-        _parse_numstat_output(result.stdout)
-    )
+    return _merge_and_sort_diff_stats(_parse_numstat_output(result.stdout))
 
 
 def _get_untracked_files() -> list[str]:
-    result = _run_git(
-        ["git", "ls-files", "--others", "--exclude-standard"]
-    )
+    result = _run_git(["git", "ls-files", "--others", "--exclude-standard"])
 
     return _unique_sorted(result.stdout.splitlines())
 
@@ -171,9 +166,7 @@ def _run_git(command: list[str]) -> subprocess.CompletedProcess[str]:
             "Git is not installed or not available in PATH."
         ) from error
     except subprocess.CalledProcessError as error:
-        raise GitCommandError(
-            _format_git_error(error)
-        ) from error
+        raise GitCommandError(_format_git_error(error)) from error
 
 
 def _format_git_error(error: subprocess.CalledProcessError) -> str:

@@ -63,10 +63,7 @@ class RiskReport:
             "risk": {
                 "score": self.risk_score,
                 "level": self.risk_level,
-                "factors": [
-                    factor.to_dict()
-                    for factor in self.risk_factors
-                ],
+                "factors": [factor.to_dict() for factor in self.risk_factors],
             },
         }
 
@@ -85,21 +82,14 @@ def build_risk_report(
     total_deletions = sum(stat.deletions for stat in diff_stats)
     total_changed_lines = total_additions + total_deletions
 
-    test_files = [
-        file_path
-        for file_path in changed_files
-        if _is_test_file(file_path)
-    ]
+    test_files = [file_path for file_path in changed_files if _is_test_file(file_path)]
 
     sensitive_files = [
-        file_path
-        for file_path in changed_files
-        if _is_sensitive_file(file_path)
+        file_path for file_path in changed_files if _is_sensitive_file(file_path)
     ]
 
     has_python_source_changes = any(
-        _is_python_source_file(file_path)
-        for file_path in changed_files
+        _is_python_source_file(file_path) for file_path in changed_files
     )
 
     risk_factors = _build_risk_factors(
@@ -230,7 +220,11 @@ def _is_sensitive_file(file_path: str) -> bool:
     if file_name in sensitive_file_names:
         return True
 
-    if len(path.parts) >= 3 and path.parts[0] == ".github" and path.parts[1] == "workflows":
+    if (
+        len(path.parts) >= 3
+        and path.parts[0] == ".github"
+        and path.parts[1] == "workflows"
+    ):
         return file_name.endswith((".yml", ".yaml"))
 
     return False

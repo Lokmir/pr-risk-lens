@@ -16,9 +16,7 @@ def test_get_changed_files_returns_git_status_output(monkeypatch) -> None:
             args=["git", "status", "--porcelain"],
             returncode=0,
             stdout=(
-                " M README.md\n"
-                "?? src/pr_risk_lens/new_file.py\n"
-                "A  tests/new_test.py\n"
+                " M README.md\n?? src/pr_risk_lens/new_file.py\nA  tests/new_test.py\n"
             ),
             stderr="",
         )
@@ -58,10 +56,7 @@ def test_get_diff_stats_returns_git_numstat_output(monkeypatch) -> None:
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
-                stdout=(
-                    "5\t2\tREADME.md\n"
-                    "12\t0\tsrc/pr_risk_lens/git.py\n"
-                ),
+                stdout=("5\t2\tREADME.md\n12\t0\tsrc/pr_risk_lens/git.py\n"),
                 stderr="",
             )
 
@@ -181,12 +176,16 @@ def test_get_changed_files_raises_clear_error_when_git_is_missing(monkeypatch) -
     assert str(error.value) == "Git is not installed or not available in PATH."
 
 
-def test_get_changed_files_raises_clear_error_outside_git_repository(monkeypatch) -> None:
+def test_get_changed_files_raises_clear_error_outside_git_repository(
+    monkeypatch,
+) -> None:
     def fake_run(*args, **kwargs):
         raise subprocess.CalledProcessError(
             returncode=128,
             cmd=["git", "status", "--porcelain"],
-            stderr="fatal: not a git repository (or any of the parent directories): .git",
+            stderr=(
+                "fatal: not a git repository (or any of the parent directories): .git"
+            ),
         )
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -221,9 +220,7 @@ def test_get_changed_files_raises_clear_error_for_unknown_base_ref(monkeypatch) 
 def test_get_diff_stats_counts_untracked_file_lines(monkeypatch, tmp_path) -> None:
     untracked_file = tmp_path / "new_module.py"
     untracked_file.write_text(
-        "def hello():\n"
-        "    return 'hello'\n"
-        "\n",
+        "def hello():\n    return 'hello'\n\n",
         encoding="utf-8",
     )
 
@@ -265,11 +262,7 @@ def test_get_changed_files_returns_sorted_unique_paths(monkeypatch) -> None:
         return subprocess.CompletedProcess(
             args=["git", "status", "--porcelain"],
             returncode=0,
-            stdout=(
-                " M z_file.py\n"
-                " M a_file.py\n"
-                " M z_file.py\n"
-            ),
+            stdout=(" M z_file.py\n M a_file.py\n M z_file.py\n"),
             stderr="",
         )
 
@@ -291,11 +284,7 @@ def test_get_diff_stats_merges_duplicates_and_sorts_by_file_path(monkeypatch) ->
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
-                stdout=(
-                    "2\t1\tz_file.py\n"
-                    "5\t2\ta_file.py\n"
-                    "3\t4\tz_file.py\n"
-                ),
+                stdout=("2\t1\tz_file.py\n5\t2\ta_file.py\n3\t4\tz_file.py\n"),
                 stderr="",
             )
 
@@ -395,6 +384,7 @@ def test_get_diff_stats_uses_destination_path_for_braced_rename(monkeypatch) -> 
     assert diff_stats == [
         DiffStat(file_path="src/new_name.py", additions=0, deletions=0),
     ]
+
 
 def test_get_diff_stats_counts_binary_untracked_file_as_zero_lines(
     monkeypatch,

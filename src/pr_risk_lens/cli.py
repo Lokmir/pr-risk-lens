@@ -96,9 +96,7 @@ def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
 
     console.print()
     console.print("[bold]Tests:[/bold]")
-    console.print(
-        f"Test files changed: {'Yes' if report.has_test_changes else 'No'}"
-    )
+    console.print(f"Test files changed: {'Yes' if report.has_test_changes else 'No'}")
 
     for file_path in report.test_files:
         console.print(f"- {file_path}")
