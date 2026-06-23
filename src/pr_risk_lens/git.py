@@ -27,6 +27,8 @@ def get_changed_files(base_ref: str | None = None) -> list[str]:
     With base_ref:
         compare the current branch against the base reference using:
             git diff --name-only <base_ref>...HEAD
+
+    Returned file paths are sorted and deduplicated for stable output.
     """
     if base_ref:
         return _get_changed_files_against_base(base_ref)
@@ -44,6 +46,8 @@ def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
     With base_ref:
         compare the current branch against the base reference using:
             git diff --numstat <base_ref>...HEAD
+
+    Returned stats are sorted by file path and duplicate paths are merged.
     """
     if base_ref:
         return _get_diff_stats_against_base(base_ref)
@@ -54,7 +58,7 @@ def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
         for file_path in _get_untracked_files()
     ]
 
-    return tracked_stats + untracked_stats
+    return _merge_and_sort_diff_stats(tracked_stats + untracked_stats)
 
 
 def _get_changed_files_from_working_tree() -> list[str]:
@@ -67,7 +71,7 @@ def _get_changed_files_from_working_tree() -> list[str]:
         if file_path:
             changed_files.append(file_path)
 
-    return changed_files
+    return _unique_sorted(changed_files)
 
 
 def _get_changed_files_against_base(base_ref: str) -> list[str]:
@@ -75,7 +79,7 @@ def _get_changed_files_against_base(base_ref: str) -> list[str]:
         ["git", "diff", "--name-only", f"{base_ref}...HEAD"]
     )
 
-    return result.stdout.splitlines()
+    return _unique_sorted(result.stdout.splitlines())
 
 
 def _get_tracked_diff_stats_from_working_tree() -> list[DiffStat]:
@@ -89,7 +93,9 @@ def _get_diff_stats_against_base(base_ref: str) -> list[DiffStat]:
         ["git", "diff", "--numstat", f"{base_ref}...HEAD"]
     )
 
-    return _parse_numstat_output(result.stdout)
+    return _merge_and_sort_diff_stats(
+        _parse_numstat_output(result.stdout)
+    )
 
 
 def _get_untracked_files() -> list[str]:
@@ -97,7 +103,7 @@ def _get_untracked_files() -> list[str]:
         ["git", "ls-files", "--others", "--exclude-standard"]
     )
 
-    return result.stdout.splitlines()
+    return _unique_sorted(result.stdout.splitlines())
 
 
 def _build_untracked_file_stat(file_path: str) -> DiffStat:
@@ -122,6 +128,34 @@ def _count_file_lines(file_path: str) -> int:
         return 0
 
     return len(content.splitlines())
+
+
+def _unique_sorted(file_paths: list[str]) -> list[str]:
+    return sorted(set(file_paths))
+
+
+def _merge_and_sort_diff_stats(stats: list[DiffStat]) -> list[DiffStat]:
+    totals: dict[str, tuple[int, int]] = {}
+
+    for stat in stats:
+        current_additions, current_deletions = totals.get(
+            stat.file_path,
+            (0, 0),
+        )
+
+        totals[stat.file_path] = (
+            current_additions + stat.additions,
+            current_deletions + stat.deletions,
+        )
+
+    return [
+        DiffStat(
+            file_path=file_path,
+            additions=totals[file_path][0],
+            deletions=totals[file_path][1],
+        )
+        for file_path in sorted(totals)
+    ]
 
 
 def _run_git(command: list[str]) -> subprocess.CompletedProcess[str]:

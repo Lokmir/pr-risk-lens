@@ -246,3 +246,61 @@ def test_get_diff_stats_counts_untracked_file_lines(monkeypatch, tmp_path) -> No
         DiffStat(file_path="README.md", additions=5, deletions=2),
         DiffStat(file_path="new_module.py", additions=3, deletions=0),
     ]
+
+def test_get_changed_files_returns_sorted_unique_paths(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=["git", "status", "--porcelain"],
+            returncode=0,
+            stdout=(
+                " M z_file.py\n"
+                " M a_file.py\n"
+                " M z_file.py\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    changed_files = get_changed_files()
+
+    assert changed_files == [
+        "a_file.py",
+        "z_file.py",
+    ]
+
+
+def test_get_diff_stats_merges_duplicates_and_sorts_by_file_path(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout=(
+                    "2\t1\tz_file.py\n"
+                    "5\t2\ta_file.py\n"
+                    "3\t4\tz_file.py\n"
+                ),
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats()
+
+    assert diff_stats == [
+        DiffStat(file_path="a_file.py", additions=5, deletions=2),
+        DiffStat(file_path="z_file.py", additions=5, deletions=5),
+    ]
