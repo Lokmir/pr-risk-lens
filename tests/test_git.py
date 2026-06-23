@@ -54,7 +54,7 @@ def test_get_diff_stats_returns_git_numstat_output(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
         command = args[0]
 
-        if command == ["git", "diff", "--numstat", "HEAD"]:
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
@@ -89,7 +89,7 @@ def test_get_diff_stats_handles_binary_files(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
         command = args[0]
 
-        if command == ["git", "diff", "--numstat", "HEAD"]:
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
@@ -118,10 +118,16 @@ def test_get_diff_stats_handles_binary_files(monkeypatch) -> None:
 
 def test_get_changed_files_can_compare_against_base(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
-        assert args[0] == ["git", "diff", "--name-only", "main...HEAD"]
+        assert args[0] == [
+            "git",
+            "diff",
+            "--name-only",
+            "--find-renames",
+            "main...HEAD",
+        ]
 
         return subprocess.CompletedProcess(
-            args=["git", "diff", "--name-only", "main...HEAD"],
+            args=["git", "diff", "--name-only", "--find-renames", "main...HEAD"],
             returncode=0,
             stdout="README.md\nsrc/pr_risk_lens/cli.py\n",
             stderr="",
@@ -139,10 +145,16 @@ def test_get_changed_files_can_compare_against_base(monkeypatch) -> None:
 
 def test_get_diff_stats_can_compare_against_base(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
-        assert args[0] == ["git", "diff", "--numstat", "main...HEAD"]
+        assert args[0] == [
+            "git",
+            "diff",
+            "--numstat",
+            "--find-renames",
+            "main...HEAD",
+        ]
 
         return subprocess.CompletedProcess(
-            args=["git", "diff", "--numstat", "main...HEAD"],
+            args=["git", "diff", "--numstat", "--find-renames", "main...HEAD"],
             returncode=0,
             stdout="5\t2\tREADME.md\n",
             stderr="",
@@ -220,7 +232,7 @@ def test_get_diff_stats_counts_untracked_file_lines(monkeypatch, tmp_path) -> No
     def fake_run(*args, **kwargs):
         command = args[0]
 
-        if command == ["git", "diff", "--numstat", "HEAD"]:
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
@@ -246,6 +258,7 @@ def test_get_diff_stats_counts_untracked_file_lines(monkeypatch, tmp_path) -> No
         DiffStat(file_path="README.md", additions=5, deletions=2),
         DiffStat(file_path="new_module.py", additions=3, deletions=0),
     ]
+
 
 def test_get_changed_files_returns_sorted_unique_paths(monkeypatch) -> None:
     def fake_run(*args, **kwargs):
@@ -274,7 +287,7 @@ def test_get_diff_stats_merges_duplicates_and_sorts_by_file_path(monkeypatch) ->
     def fake_run(*args, **kwargs):
         command = args[0]
 
-        if command == ["git", "diff", "--numstat", "HEAD"]:
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
             return subprocess.CompletedProcess(
                 args=command,
                 returncode=0,
@@ -303,4 +316,82 @@ def test_get_diff_stats_merges_duplicates_and_sorts_by_file_path(monkeypatch) ->
     assert diff_stats == [
         DiffStat(file_path="a_file.py", additions=5, deletions=2),
         DiffStat(file_path="z_file.py", additions=5, deletions=5),
+    ]
+
+
+def test_get_changed_files_uses_destination_path_for_renamed_files(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=["git", "status", "--porcelain"],
+            returncode=0,
+            stdout="R  old_name.py -> new_name.py\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    changed_files = get_changed_files()
+
+    assert changed_files == ["new_name.py"]
+
+
+def test_get_diff_stats_uses_destination_path_for_simple_rename(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="0\t0\told_name.py => new_name.py\n",
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats()
+
+    assert diff_stats == [
+        DiffStat(file_path="new_name.py", additions=0, deletions=0),
+    ]
+
+
+def test_get_diff_stats_uses_destination_path_for_braced_rename(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        command = args[0]
+
+        if command == ["git", "diff", "--numstat", "--find-renames", "HEAD"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="0\t0\tsrc/{old_name.py => new_name.py}\n",
+                stderr="",
+            )
+
+        if command == ["git", "ls-files", "--others", "--exclude-standard"]:
+            return subprocess.CompletedProcess(
+                args=command,
+                returncode=0,
+                stdout="",
+                stderr="",
+            )
+
+        raise AssertionError(f"Unexpected command: {command}")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    diff_stats = get_diff_stats()
+
+    assert diff_stats == [
+        DiffStat(file_path="src/new_name.py", additions=0, deletions=0),
     ]

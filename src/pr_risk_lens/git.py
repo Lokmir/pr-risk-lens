@@ -26,7 +26,7 @@ def get_changed_files(base_ref: str | None = None) -> list[str]:
 
     With base_ref:
         compare the current branch against the base reference using:
-            git diff --name-only <base_ref>...HEAD
+            git diff --name-only --find-renames <base_ref>...HEAD
 
     Returned file paths are sorted and deduplicated for stable output.
     """
@@ -45,7 +45,7 @@ def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
 
     With base_ref:
         compare the current branch against the base reference using:
-            git diff --numstat <base_ref>...HEAD
+            git diff --numstat --find-renames <base_ref>...HEAD
 
     Returned stats are sorted by file path and duplicate paths are merged.
     """
@@ -76,21 +76,21 @@ def _get_changed_files_from_working_tree() -> list[str]:
 
 def _get_changed_files_against_base(base_ref: str) -> list[str]:
     result = _run_git(
-        ["git", "diff", "--name-only", f"{base_ref}...HEAD"]
+        ["git", "diff", "--name-only", "--find-renames", f"{base_ref}...HEAD"]
     )
 
     return _unique_sorted(result.stdout.splitlines())
 
 
 def _get_tracked_diff_stats_from_working_tree() -> list[DiffStat]:
-    result = _run_git(["git", "diff", "--numstat", "HEAD"])
+    result = _run_git(["git", "diff", "--numstat", "--find-renames", "HEAD"])
 
     return _parse_numstat_output(result.stdout)
 
 
 def _get_diff_stats_against_base(base_ref: str) -> list[DiffStat]:
     result = _run_git(
-        ["git", "diff", "--numstat", f"{base_ref}...HEAD"]
+        ["git", "diff", "--numstat", "--find-renames", f"{base_ref}...HEAD"]
     )
 
     return _merge_and_sort_diff_stats(
@@ -199,8 +199,14 @@ def _parse_porcelain_line(line: str) -> str:
         " M README.md"
         "?? new_file.py"
         "A  src/example.py"
+        "R  old_name.py -> new_name.py"
     """
-    return line[3:]
+    file_path = line[3:]
+
+    if " -> " in file_path:
+        return file_path.split(" -> ", maxsplit=1)[1]
+
+    return file_path
 
 
 def _parse_numstat_output(output: str) -> list[DiffStat]:
@@ -218,8 +224,10 @@ def _parse_numstat_line(line: str) -> DiffStat | None:
     """
     Extract line statistics from one line of 'git diff --numstat'.
 
-    Example line:
+    Example lines:
         "5\t2\tREADME.md"
+        "0\t0\told_name.py => new_name.py"
+        "0\t0\tsrc/{old_name.py => new_name.py}"
     """
     parts = line.split("\t", maxsplit=2)
 
@@ -229,10 +237,33 @@ def _parse_numstat_line(line: str) -> DiffStat | None:
     additions_text, deletions_text, file_path = parts
 
     return DiffStat(
-        file_path=file_path,
+        file_path=_normalize_git_path(file_path),
         additions=_parse_numstat_number(additions_text),
         deletions=_parse_numstat_number(deletions_text),
     )
+
+
+def _normalize_git_path(file_path: str) -> str:
+    """
+    Normalize Git rename paths to keep the destination path.
+
+    Examples:
+        "old.py => new.py" -> "new.py"
+        "src/{old.py => new.py}" -> "src/new.py"
+    """
+    if "=>" not in file_path:
+        return file_path
+
+    if "{" in file_path and "}" in file_path:
+        prefix = file_path.split("{", maxsplit=1)[0]
+        inside = file_path.split("{", maxsplit=1)[1].split("}", maxsplit=1)[0]
+        suffix = file_path.split("}", maxsplit=1)[1]
+
+        new_name = inside.split("=>", maxsplit=1)[1].strip()
+
+        return f"{prefix}{new_name}{suffix}"
+
+    return file_path.split("=>", maxsplit=1)[1].strip()
 
 
 def _parse_numstat_number(value: str) -> int:
