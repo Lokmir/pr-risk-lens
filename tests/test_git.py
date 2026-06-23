@@ -1,6 +1,7 @@
 import subprocess
+import pytest
 
-from pr_risk_lens.git import DiffStat, get_changed_files, get_diff_stats
+from pr_risk_lens.git import DiffStat, GitCommandError, get_changed_files, get_diff_stats
 
 
 def test_get_changed_files_returns_git_status_output(monkeypatch) -> None:
@@ -121,3 +122,46 @@ def test_get_diff_stats_can_compare_against_base(monkeypatch) -> None:
     assert diff_stats == [
         DiffStat(file_path="README.md", additions=5, deletions=2),
     ]
+
+def test_get_changed_files_raises_clear_error_when_git_is_missing(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        raise FileNotFoundError()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(GitCommandError) as error:
+        get_changed_files()
+
+    assert str(error.value) == "Git is not installed or not available in PATH."
+
+
+def test_get_changed_files_raises_clear_error_outside_git_repository(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=128,
+            cmd=["git", "status", "--porcelain"],
+            stderr="fatal: not a git repository (or any of the parent directories): .git",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(GitCommandError) as error:
+        get_changed_files()
+
+    assert str(error.value) == "Not inside a Git repository."
+
+
+def test_get_changed_files_raises_clear_error_for_unknown_base_ref(monkeypatch) -> None:
+    def fake_run(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=128,
+            cmd=["git", "diff", "--name-only", "unknown...HEAD"],
+            stderr="fatal: ambiguous argument 'unknown...HEAD': unknown revision or path not in the working tree.",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(GitCommandError) as error:
+        get_changed_files(base_ref="unknown")
+
+    assert str(error.value) == "Git reference not found. Check the branch or base ref name."

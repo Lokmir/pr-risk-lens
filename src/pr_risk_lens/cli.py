@@ -3,7 +3,7 @@ import json
 import typer
 from rich.console import Console
 
-from pr_risk_lens.git import get_changed_files, get_diff_stats
+from pr_risk_lens.git import GitCommandError, get_changed_files, get_diff_stats
 from pr_risk_lens.report import RiskReport, build_risk_report
 
 app = typer.Typer(
@@ -43,8 +43,13 @@ def analyze(
     """
     Analyze Git changes and print a risk report.
     """
-    changed_files = get_changed_files(base_ref=base)
-    diff_stats = get_diff_stats(base_ref=base)
+    try:
+        changed_files = get_changed_files(base_ref=base)
+        diff_stats = get_diff_stats(base_ref=base)
+    except GitCommandError as error:
+        console.print(f"[red]Error:[/red] {error}")
+        raise typer.Exit(code=2) from error
+
     report = build_risk_report(changed_files, diff_stats)
 
     if json_output:

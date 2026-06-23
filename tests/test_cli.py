@@ -3,7 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from pr_risk_lens.cli import app
-from pr_risk_lens.git import DiffStat
+from pr_risk_lens.git import DiffStat, GitCommandError
 
 runner = CliRunner()
 
@@ -209,3 +209,18 @@ def test_analyze_command_fails_when_score_exceeds_max_score(monkeypatch) -> None
     assert result.exit_code == 1
     assert "Risk score: 15/100" in result.output
     assert "Risk score 15 exceeds max score 10." in result.output
+
+def test_analyze_command_displays_clean_git_error(monkeypatch) -> None:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        raise GitCommandError("Not inside a Git repository.")
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+
+    result = runner.invoke(app, ["analyze"])
+
+    assert result.exit_code == 2
+    assert "Error:" in result.output
+    assert "Not inside a Git repository." in result.output
