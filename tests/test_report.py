@@ -69,3 +69,39 @@ def test_build_risk_report_returns_high_risk_for_large_change() -> None:
 
     assert report.risk_score == 65
     assert report.risk_level == "High"
+
+def test_risk_report_can_be_converted_to_dict() -> None:
+    report = RiskReport(
+        changed_files=["README.md"],
+        total_additions=5,
+        total_deletions=2,
+        risk_score=15,
+        risk_level="Low",
+        risk_factors=[
+            RiskFactor(label="Change size: 7 changed lines", points=10),
+            RiskFactor(label="Files changed: 1 files", points=5),
+        ],
+    )
+
+    assert report.to_dict() == {
+        "changed_files": ["README.md"],
+        "diff_stats": {
+            "lines_added": 5,
+            "lines_deleted": 2,
+            "total_changed_lines": 7,
+        },
+        "risk": {
+            "score": 15,
+            "level": "Low",
+            "factors": [
+                {
+                    "label": "Change size: 7 changed lines",
+                    "points": 10,
+                },
+                {
+                    "label": "Files changed: 1 files",
+                    "points": 5,
+                },
+            ],
+        },
+    }

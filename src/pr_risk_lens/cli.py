@@ -1,3 +1,5 @@
+import json
+
 import typer
 from rich.console import Console
 
@@ -21,18 +23,32 @@ def main() -> None:
 
 
 @app.command()
-def analyze() -> None:
+def analyze(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output the report as JSON.",
+    ),
+) -> None:
     """
-    Analyze Git changes and print a first risk report.
+    Analyze Git changes and print a risk report.
     """
     changed_files = get_changed_files()
     diff_stats = get_diff_stats()
     report = build_risk_report(changed_files, diff_stats)
 
-    _print_report(report)
+    if json_output:
+        _print_json_report(report)
+        return
+
+    _print_text_report(report)
 
 
-def _print_report(report: RiskReport) -> None:
+def _print_json_report(report: RiskReport) -> None:
+    console.print(json.dumps(report.to_dict(), indent=2))
+
+
+def _print_text_report(report: RiskReport) -> None:
     console.print("[bold]PR Risk Lens[/bold]")
     console.print("Transparent risk scoring for Python pull requests.")
     console.print()

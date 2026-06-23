@@ -1,3 +1,4 @@
+import json
 from typer.testing import CliRunner
 
 from pr_risk_lens.cli import app
@@ -60,3 +61,34 @@ def test_analyze_command_displays_changed_files(monkeypatch) -> None:
     assert "Risk level: Low" in result.output
     assert "Change size: 18 changed lines (+10)" in result.output
     assert "Files changed: 2 files (+5)" in result.output
+
+def test_analyze_command_can_output_json(monkeypatch) -> None:
+    def fake_get_changed_files() -> list[str]:
+        return ["README.md"]
+
+    def fake_get_diff_stats() -> list[DiffStat]:
+        return [
+            DiffStat(file_path="README.md", additions=5, deletions=2),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze", "--json"])
+
+    assert result.exit_code == 0
+
+    data = json.loads(result.output)
+
+    assert data["changed_files"] == ["README.md"]
+    assert data["diff_stats"]["lines_added"] == 5
+    assert data["diff_stats"]["lines_deleted"] == 2
+    assert data["diff_stats"]["total_changed_lines"] == 7
+    assert data["risk"]["score"] == 15
+    assert data["risk"]["level"] == "Low"

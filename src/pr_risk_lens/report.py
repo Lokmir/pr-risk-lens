@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from pr_risk_lens.git import DiffStat
 
@@ -7,6 +8,12 @@ from pr_risk_lens.git import DiffStat
 class RiskFactor:
     label: str
     points: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "points": self.points,
+        }
 
 
 @dataclass(frozen=True)
@@ -25,6 +32,24 @@ class RiskReport:
     @property
     def total_changed_lines(self) -> int:
         return self.total_additions + self.total_deletions
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "changed_files": self.changed_files,
+            "diff_stats": {
+                "lines_added": self.total_additions,
+                "lines_deleted": self.total_deletions,
+                "total_changed_lines": self.total_changed_lines,
+            },
+            "risk": {
+                "score": self.risk_score,
+                "level": self.risk_level,
+                "factors": [
+                    factor.to_dict()
+                    for factor in self.risk_factors
+                ],
+            },
+        }
 
 
 def build_risk_report(
