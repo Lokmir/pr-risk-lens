@@ -1,5 +1,7 @@
 # PR Risk Lens
 
+[![Tests](https://github.com/Lokmir/pr-risk-lens/actions/workflows/tests.yml/badge.svg)](https://github.com/Lokmir/pr-risk-lens/actions/workflows/tests.yml)
+
 Transparent risk scoring for Python pull requests.
 
 PR Risk Lens is a local-first CLI tool that analyzes Git changes and produces a simple, explainable risk score for Python pull requests.
