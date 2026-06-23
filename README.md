@@ -2,40 +2,44 @@
 
 Transparent risk scoring for Python pull requests.
 
-PR Risk Lens is a local-first Python CLI tool that analyzes Git changes and produces a clear, transparent risk report.
+PR Risk Lens is a local-first CLI tool that analyzes Git changes and produces a simple, explainable risk score for Python pull requests.
 
-The goal is not to replace human code review.
-The goal is to provide a first simple, explainable signal before review.
+The goal is not to block developers with a black-box score. The goal is to make pull request risk easier to understand by showing clear factors such as changed files, line changes, test coverage signals, and sensitive file changes.
 
 ## Current status
 
-Early MVP.
+PR Risk Lens is currently an MVP.
 
-The tool can currently:
+It can:
 
-* detect changed files in a Git repository;
-* include modified and untracked files;
+* analyze local Git working tree changes;
+* compare the current branch against a base branch;
+* list changed files;
 * count added and deleted lines;
-* compute a simple transparent risk score;
-* explain which factors contributed to the score.
-
-No LLM or external API is used.
+* detect test file changes;
+* detect risk-sensitive files;
+* compute a transparent risk score;
+* output a human-readable report;
+* output JSON;
+* exit with a non-zero code when the score exceeds a maximum threshold.
 
 ## Installation for development
 
-Requirements:
+Clone the repository:
 
-* Python 3.11 or higher
-* Git
+```powershell
+git clone https://github.com/Lokmir/pr-risk-lens.git
+cd pr-risk-lens
+```
 
 Create and activate a virtual environment:
 
 ```powershell
 python -m venv .venv
-.venv\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 ```
 
-Install the project in editable mode:
+Install the project in editable mode with development dependencies:
 
 ```powershell
 python -m pip install -e ".[dev]"
@@ -49,7 +53,7 @@ pytest
 
 ## Usage
 
-From inside a Git repository, run:
+Analyze local working tree changes:
 
 ```powershell
 pr-risk-lens analyze
@@ -61,154 +65,217 @@ Example output:
 PR Risk Lens
 Transparent risk scoring for Python pull requests.
 
+Mode: local working tree
+
 Changed files:
+- README.md
 - src/pr_risk_lens/cli.py
-- src/pr_risk_lens/report.py
 - tests/test_cli.py
-- tests/test_report.py
 
 Diff stats:
-Lines added: 150
-Lines deleted: 7
+Lines added: 42
+Lines deleted: 8
+
+Tests:
+Test files changed: Yes
+- tests/test_cli.py
+
+Sensitive files:
+Sensitive files changed: No
 
 Risk:
-Risk score: 40/100
-Risk level: Medium
+Risk score: 15/100
+Risk level: Low
 
 Risk factors:
-- Change size: 157 changed lines (+25)
-- Files changed: 4 files (+15)
-```
-### JSON output
-
-PR Risk Lens can also output the report as JSON:
-
-```powershell
-pr-risk-lens analyze --json
+- Change size: 50 changed lines (+10)
+- Files changed: 3 files (+5)
 ```
 
-Example output:
+## Compare against a base branch
 
-```json
-{
-  "changed_files": [
-    "README.md",
-    "src/pr_risk_lens/cli.py"
-  ],
-  "diff_stats": {
-    "lines_added": 20,
-    "lines_deleted": 4,
-    "total_changed_lines": 24
-  },
-  "risk": {
-    "score": 15,
-    "level": "Low",
-    "factors": [
-      {
-        "label": "Change size: 24 changed lines",
-        "points": 10
-      },
-      {
-        "label": "Files changed: 2 files",
-        "points": 5
-      }
-    ]
-  }
-}
-```
-
-This is useful for automation, CI workflows, or future integrations.
-
-
-### Branch comparison mode
-
-By default, PR Risk Lens analyzes local working tree changes:
-
-```powershell
-pr-risk-lens analyze
-```
-
-This is useful before committing your local changes.
-
-To analyze the current branch against a base branch, use:
+Analyze the current branch against a base reference:
 
 ```powershell
 pr-risk-lens analyze --base main
 ```
 
-This compares the current branch against `main`, which is closer to how a Pull Request is reviewed.
+This is useful when analyzing pull-request-like changes locally.
+
+## JSON output
+
+Output the report as JSON:
+
+```powershell
+pr-risk-lens analyze --json
+```
+
+You can also combine JSON output with a base branch:
+
+```powershell
+pr-risk-lens analyze --base main --json
+```
+
+## Maximum score threshold
+
+PR Risk Lens can fail the command when the risk score is greater than a chosen threshold:
+
+```powershell
+pr-risk-lens analyze --max-score 60
+```
+
+This is useful in CI because a non-zero exit code can fail a workflow.
+
+You can combine it with branch comparison:
+
+```powershell
+pr-risk-lens analyze --base main --max-score 60
+```
+
+Behavior:
+
+* if the risk score is less than or equal to the threshold, the command exits with code `0`;
+* if the risk score is greater than the threshold, the command exits with code `1`.
 
 Example:
 
 ```text
-PR Risk Lens
-Transparent risk scoring for Python pull requests.
-
-Mode: branch comparison against main
-
-Changed files:
-- src/payment.py
-- tests/test_payment.py
-
-Diff stats:
-Lines added: 80
-Lines deleted: 12
-
-Tests:
-Test files changed: Yes
-- tests/test_payment.py
-
 Risk:
-Risk score: 30/100
-Risk level: Low
+Risk score: 75/100
+Risk level: High
 
-Risk factors:
-- Change size: 92 changed lines (+25)
-- Files changed: 2 files (+5)
+Risk score 75 exceeds max score 60.
 ```
 
-Use this mode when you are working on a feature branch and want to compare it with the main branch before opening a Pull Request.
+## Risk scoring
 
-## Risk scoring rules
+The score is intentionally simple and transparent.
 
-The current score is intentionally simple and transparent.
+Current factors:
 
-Change size:
-
-* 1 to 50 changed lines: +10
-* 51 to 200 changed lines: +25
-* More than 200 changed lines: +40
-
-Files changed:
-
-* 1 to 3 files: +5
-* 4 to 10 files: +15
-* More than 10 files: +25
+| Factor                                         | Points |
+| ---------------------------------------------- | -----: |
+| Small change size, up to 50 changed lines      |    +10 |
+| Medium change size, up to 200 changed lines    |    +25 |
+| Large change size, more than 200 changed lines |    +40 |
+| Up to 3 changed files                          |     +5 |
+| Up to 10 changed files                         |    +15 |
+| More than 10 changed files                     |    +25 |
+| Python source changes without test changes     |    +10 |
+| Risk-sensitive files changed                   |    +10 |
 
 Risk levels:
 
-* 0: None
-* 1 to 30: Low
-* 31 to 60: Medium
-* 61 and above: High
+|        Score | Level  |
+| -----------: | ------ |
+|            0 | None   |
+|      1 to 30 | Low    |
+|     31 to 60 | Medium |
+| 61 and above | High   |
+
+## Test file detection
+
+A file is considered a test file when:
+
+* it is inside a `tests` folder;
+* its name starts with `test_`;
+* its name ends with `_test.py`.
+
+Examples:
+
+```text
+tests/test_cli.py
+test_report.py
+report_test.py
+```
+
+## Sensitive file detection
+
+The following files are currently considered risk-sensitive:
+
+```text
+pyproject.toml
+requirements.txt
+requirements-dev.txt
+setup.py
+setup.cfg
+tox.ini
+Dockerfile
+docker-compose.yml
+docker-compose.yaml
+.github/workflows/*.yml
+.github/workflows/*.yaml
+```
+
+Changing these files adds risk because they may affect packaging, dependencies, CI, or runtime behavior.
+
+## Git behavior
+
+For local working tree analysis, PR Risk Lens uses Git to inspect:
+
+* tracked file changes;
+* untracked files;
+* added and deleted lines;
+* renamed files.
+
+For untracked files, PR Risk Lens counts readable text lines as added lines. Binary or unreadable untracked files are counted as `0` added lines so the analysis does not crash.
+
+Git output is normalized to keep reports stable:
+
+* changed files are sorted;
+* duplicate paths are removed;
+* duplicate diff stats are merged;
+* renamed files use the destination path.
+
+## Exit codes
+
+| Exit code | Meaning                           |
+| --------: | --------------------------------- |
+|         0 | Analysis succeeded                |
+|         1 | Risk score exceeded `--max-score` |
+|         2 | Git command error                 |
+
+## Development
+
+Run all tests:
+
+```powershell
+pytest
+```
+
+Run the CLI locally:
+
+```powershell
+pr-risk-lens analyze
+```
+
+Run JSON output:
+
+```powershell
+pr-risk-lens analyze --json
+```
+
+Run branch comparison:
+
+```powershell
+pr-risk-lens analyze --base main
+```
+
+Run threshold mode:
+
+```powershell
+pr-risk-lens analyze --max-score 60
+```
 
 ## Project philosophy
 
-PR Risk Lens should be:
+PR Risk Lens should stay:
 
 * local-first;
-* simple to understand;
-* transparent in its scoring;
-* useful before human review;
-* friendly for Python beginners and open source maintainers.
+* transparent;
+* explainable;
+* lightweight;
+* useful in CI;
+* understandable without AI or external services.
 
-## Roadmap
-
-Possible next steps:
-
-* add JSON output;
-* detect risky file types;
-* detect test changes;
-* add configuration;
-* support comparison against a base branch;
-* optionally add AI explanations later.
+AI may be explored later, but the MVP is deliberately deterministic and rule-based.
