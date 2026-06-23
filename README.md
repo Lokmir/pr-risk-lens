@@ -79,6 +79,46 @@ Risk factors:
 - Change size: 157 changed lines (+25)
 - Files changed: 4 files (+15)
 ```
+### JSON output
+
+PR Risk Lens can also output the report as JSON:
+
+```powershell
+pr-risk-lens analyze --json
+```
+
+Example output:
+
+```json
+{
+  "changed_files": [
+    "README.md",
+    "src/pr_risk_lens/cli.py"
+  ],
+  "diff_stats": {
+    "lines_added": 20,
+    "lines_deleted": 4,
+    "total_changed_lines": 24
+  },
+  "risk": {
+    "score": 15,
+    "level": "Low",
+    "factors": [
+      {
+        "label": "Change size: 24 changed lines",
+        "points": 10
+      },
+      {
+        "label": "Files changed: 2 files",
+        "points": 5
+      }
+    ]
+  }
+}
+```
+
+This is useful for automation, CI workflows, or future integrations.
+
 
 ## Risk scoring rules
 
