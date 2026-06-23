@@ -34,6 +34,11 @@ def analyze(
         "--json",
         help="Output the report as JSON.",
     ),
+    max_score: int | None = typer.Option(
+        None,
+        "--max-score",
+        help="Exit with code 1 if the risk score is greater than this value.",
+    ),
 ) -> None:
     """
     Analyze Git changes and print a risk report.
@@ -44,9 +49,14 @@ def analyze(
 
     if json_output:
         _print_json_report(report)
-        return
+    else:
+        _print_text_report(report, base_ref=base)
 
-    _print_text_report(report, base_ref=base)
+    _exit_if_score_is_too_high(
+        report=report,
+        max_score=max_score,
+        json_output=json_output,
+    )
 
 
 def _print_json_report(report: RiskReport) -> None:
@@ -107,3 +117,23 @@ def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
 
     for factor in report.risk_factors:
         console.print(f"- {factor.label} (+{factor.points})")
+
+
+def _exit_if_score_is_too_high(
+    report: RiskReport,
+    max_score: int | None,
+    json_output: bool,
+) -> None:
+    if max_score is None:
+        return
+
+    if report.risk_score <= max_score:
+        return
+
+    if not json_output:
+        console.print()
+        console.print(
+            f"[red]Risk score {report.risk_score} exceeds max score {max_score}.[/red]"
+        )
+
+    raise typer.Exit(code=1)

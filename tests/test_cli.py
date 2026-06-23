@@ -161,3 +161,51 @@ def test_analyze_command_displays_sensitive_files(monkeypatch) -> None:
     assert "Sensitive files changed: Yes" in result.output
     assert "pyproject.toml" in result.output
     assert "Risk-sensitive files changed (+10)" in result.output
+
+def test_analyze_command_succeeds_when_score_is_under_max_score(monkeypatch) -> None:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return ["README.md"]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [
+            DiffStat(file_path="README.md", additions=5, deletions=2),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze", "--max-score", "20"])
+
+    assert result.exit_code == 0
+    assert "Risk score: 15/100" in result.output
+
+
+def test_analyze_command_fails_when_score_exceeds_max_score(monkeypatch) -> None:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return ["README.md"]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [
+            DiffStat(file_path="README.md", additions=5, deletions=2),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze", "--max-score", "10"])
+
+    assert result.exit_code == 1
+    assert "Risk score: 15/100" in result.output
+    assert "Risk score 15 exceeds max score 10." in result.output
