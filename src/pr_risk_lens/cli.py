@@ -683,7 +683,7 @@ def _build_markdown_risky_keyword_section(report: RiskReport) -> list[str]:
 
     lines.extend(
         [
-            "| Keyword | Location | Added line | Points |",
+            "| Keyword | Location | Line content | Points |",
             "| --- | --- | --- | ---: |",
         ]
     )

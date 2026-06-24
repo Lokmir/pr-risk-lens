@@ -586,33 +586,35 @@ Changing these files adds risk because they may affect packaging, dependencies, 
 
 ### Risky keywords
 
-PR Risk Lens can detect risky keywords in added lines.
+PR Risk Lens can detect risky patterns in added lines.
 
-This helps reviewers quickly notice changes that may deserve extra attention, such as secrets, authentication values, unsafe execution patterns, or unfinished work markers.
+This helps reviewers quickly notice changes that may deserve extra attention, such as secrets, authentication values, or unsafe execution patterns.
 
 Current risky keyword patterns include:
 
 ```text
-password
-secret
-token
-api_key
-private_key
+password = ...
+secret = ...
+token = ...
+api_key = ...
+private_key = ...
 eval(
 exec(
 shell=True
 verify=False
-TODO
-FIXME
 ```
+
 Risky keyword matches are shown in JSON output, Markdown summaries, and full Markdown reports.
+
+To avoid leaking secrets into CI logs, generated reports, or pull request comments, PR Risk Lens does not print the matched line content. Reports show the keyword, file path, line number, and points only. Matched line content is hidden as `<hidden>`.
 
 Example:
 
+```markdown
 ### Risky keyword matches
 
 - `password` in `src/auth.py:12` `+10`
-
+```
 
 ## Git behavior
 
