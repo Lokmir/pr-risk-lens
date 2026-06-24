@@ -4,6 +4,15 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+* Markdown output format with `pr-risk-lens analyze --format markdown`.
+* Structured output format option with `--format text`, `--format json`, and `--format markdown`.
+
+### Changed
+
+* Kept `--json` as a backwards-compatible shortcut for JSON output.
+
 ## v0.2.0 - 2026-06-24
 
 ### Added

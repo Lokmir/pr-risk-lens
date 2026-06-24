@@ -118,18 +118,76 @@ pr-risk-lens analyze --base main
 
 This is useful when analyzing pull-request-like changes locally.
 
-## JSON output
+## Output formats
 
-Output the report as JSON:
+PR Risk Lens supports multiple output formats.
+
+Human-readable text output is the default:
+
+```powershell
+pr-risk-lens analyze
+```
+
+You can explicitly request text output:
+
+```powershell
+pr-risk-lens analyze --format text
+```
+
+JSON output is useful for automation:
+
+```powershell
+pr-risk-lens analyze --format json
+```
+
+Markdown output is useful for CI reports, pull request comments, or generated artifacts:
+
+```powershell
+pr-risk-lens analyze --format markdown
+```
+
+You can combine output formats with branch comparison:
+
+```powershell
+pr-risk-lens analyze --base main --format markdown
+```
+
+The legacy `--json` flag is still supported for backwards compatibility:
 
 ```powershell
 pr-risk-lens analyze --json
 ```
+### Markdown output example
 
-You can also combine JSON output with a base branch:
+```markdown
+# PR Risk Lens Report
 
-```powershell
-pr-risk-lens analyze --base main --json
+Transparent risk scoring for Python pull requests.
+
+## Mode
+
+Branch comparison against `main`.
+
+## Summary
+
+- **Risk score:** 45/100
+- **Risk level:** Medium
+- **Changed files:** 3
+- **Lines added:** 120
+- **Lines deleted:** 18
+- **Test files changed:** Yes
+- **Sensitive files changed:** No
+
+## Changed files
+
+- `src/pr_risk_lens/cli.py`
+- `src/pr_risk_lens/report.py`
+- `tests/test_cli.py`
+
+## Risk factors
+
+- Change size: 138 changed lines `+25`
+- Files changed: 3 files `+5`
 ```
 
 ## Maximum score threshold
