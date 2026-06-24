@@ -131,6 +131,10 @@ def test_analyze_command_accepts_base_option(monkeypatch) -> None:
             DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
         ]
 
+    def fake_get_added_lines(base_ref: str | None = None) -> list[AddedLine]:
+        seen_base_refs.append(base_ref)
+        return []
+
     monkeypatch.setattr(
         "pr_risk_lens.cli.get_changed_files",
         fake_get_changed_files,
@@ -139,12 +143,16 @@ def test_analyze_command_accepts_base_option(monkeypatch) -> None:
         "pr_risk_lens.cli.get_diff_stats",
         fake_get_diff_stats,
     )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_added_lines",
+        fake_get_added_lines,
+    )
 
     result = runner.invoke(app, ["analyze", "--base", "main"])
 
     assert result.exit_code == 0
     assert "Mode: branch comparison against main" in result.output
-    assert seen_base_refs == ["main", "main"]
+    assert seen_base_refs == ["main", "main", "main"]
 
 
 def test_analyze_command_displays_sensitive_files(monkeypatch) -> None:
