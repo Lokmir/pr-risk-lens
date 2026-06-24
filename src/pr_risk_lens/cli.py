@@ -458,13 +458,26 @@ def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
         return ["- No changed files detected."]
 
     focus_lines: list[str] = []
+    has_missing_test_signal = _has_python_source_without_test_changes(report)
 
     if report.risk_level == "High":
         focus_lines.append("- High-risk change: review carefully before merging.")
     elif report.risk_level == "Medium":
-        focus_lines.append("- Medium-risk change: review the impacted areas.")
+        if has_missing_test_signal:
+            focus_lines.append(
+                "- Medium-risk change with missing test signal: "
+                "check whether focused tests should be added."
+            )
+        else:
+            focus_lines.append("- Medium-risk change: review the impacted areas.")
     elif report.risk_level == "Low":
-        focus_lines.append("- Low-risk change: review normally.")
+        if has_missing_test_signal:
+            focus_lines.append(
+                "- Low-risk change with missing test signal: "
+                "check whether tests are needed."
+            )
+        else:
+            focus_lines.append("- Low-risk change: review normally.")
     else:
         focus_lines.append("- No meaningful risk factors detected.")
 
@@ -475,7 +488,7 @@ def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
 
     if report.has_test_changes:
         focus_lines.append("- Test files changed.")
-    elif _has_python_source_without_test_changes(report):
+    elif has_missing_test_signal:
         focus_lines.append("- No test file changes detected for Python source changes.")
     else:
         focus_lines.append("- No test file changes detected.")
