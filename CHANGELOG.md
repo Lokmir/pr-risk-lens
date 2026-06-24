@@ -4,6 +4,18 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+## v0.3.1 - 2026-06-24
+
+### Added
+
+* Short Markdown summary mode with `pr-risk-lens analyze --format markdown --summary`.
+* GitHub Actions example for commenting pull requests with a PR Risk Lens Markdown summary.
+
+### Changed
+
+* Improved Markdown report readability with a summary table and review guidance.
+* Documented Markdown summary output for pull request comments.
+
 ## v0.3.0 - 2026-06-24
 
 ### Added

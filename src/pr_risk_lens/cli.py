@@ -25,7 +25,6 @@ app = typer.Typer(
     no_args_is_help=True,
     invoke_without_command=True,
 )
-
 console = Console()
 
 OUTPUT_FORMAT_OPTION = typer.Option(
@@ -33,12 +32,16 @@ OUTPUT_FORMAT_OPTION = typer.Option(
     "--format",
     help="Output format: text, json, or markdown.",
 )
-
 OUTPUT_FILE_OPTION = typer.Option(
     None,
     "--output",
     "-o",
     help="Write the report to a file instead of printing it to the terminal.",
+)
+SUMMARY_OPTION = typer.Option(
+    False,
+    "--summary",
+    help="Output a short Markdown summary instead of the full Markdown report.",
 )
 
 
@@ -68,6 +71,7 @@ def analyze(
     ),
     output_format: OutputFormat = OUTPUT_FORMAT_OPTION,
     output_file: Path | None = OUTPUT_FILE_OPTION,
+    summary: bool = SUMMARY_OPTION,
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -86,6 +90,10 @@ def analyze(
         output_format=output_format,
         json_output=json_output,
     )
+    _validate_summary_option(
+        output_format=output_format,
+        summary=summary,
+    )
 
     try:
         changed_files = get_changed_files(base_ref=base)
@@ -95,18 +103,18 @@ def analyze(
         raise typer.Exit(code=2) from error
 
     report = build_risk_report(changed_files, diff_stats)
+
     report_output = _build_report_output(
         report=report,
         base_ref=base,
         output_format=output_format,
+        summary=summary,
     )
-
     _write_or_print_report(
         report_output=report_output,
         output_file=output_file,
         output_format=output_format,
     )
-
     _exit_if_score_is_too_high(
         report=report,
         max_score=max_score,
@@ -128,6 +136,15 @@ def _resolve_output_format(
     return output_format
 
 
+def _validate_summary_option(
+    output_format: OutputFormat,
+    summary: bool,
+) -> None:
+    if summary and output_format != OutputFormat.markdown:
+        console.print("[red]Error:[/red] Use --summary with --format markdown.")
+        raise typer.Exit(code=2)
+
+
 def _get_installed_version() -> str:
     try:
         return get_package_version(PACKAGE_NAME)
@@ -139,11 +156,14 @@ def _build_report_output(
     report: RiskReport,
     base_ref: str | None,
     output_format: OutputFormat,
+    summary: bool,
 ) -> str:
     if output_format == OutputFormat.json:
         return _build_json_report(report)
 
     if output_format == OutputFormat.markdown:
+        if summary:
+            return _build_markdown_summary_report(report, base_ref=base_ref)
         return _build_markdown_report(report, base_ref=base_ref)
 
     return _build_text_report(report, base_ref=base_ref)
@@ -189,7 +209,6 @@ def _build_text_report(report: RiskReport, base_ref: str | None = None) -> str:
         return "\n".join(lines)
 
     lines.append("Changed files:")
-
     for file_path in report.changed_files:
         lines.append(f"- {file_path}")
 
@@ -245,6 +264,8 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
         "",
         "Transparent risk scoring for Python pull requests.",
         "",
+        "This report is deterministic, rule-based, and generated locally.",
+        "",
         "## Mode",
         "",
     ]
@@ -259,13 +280,15 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
             "",
             "## Summary",
             "",
-            f"- **Risk score:** {report.risk_score}/100",
-            f"- **Risk level:** {report.risk_level}",
-            f"- **Changed files:** {len(report.changed_files)}",
-            f"- **Lines added:** {report.total_additions}",
-            f"- **Lines deleted:** {report.total_deletions}",
-            f"- **Test files changed:** {_yes_no(report.has_test_changes)}",
-            f"- **Sensitive files changed:** {_yes_no(report.has_sensitive_changes)}",
+        ]
+    )
+    lines.extend(_build_markdown_summary_table(report))
+
+    lines.extend(
+        [
+            "## Review guidance",
+            "",
+            _build_markdown_review_guidance(report),
             "",
         ]
     )
@@ -283,15 +306,95 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
         ]
     )
 
-    if report.risk_factors:
-        for factor in report.risk_factors:
-            lines.append(f"- {factor.label} `+{factor.points}`")
-    else:
-        lines.append("No risk factors detected.")
-
+    lines.extend(_build_markdown_risk_factor_lines(report))
     lines.append("")
 
     return "\n".join(lines)
+
+
+def _build_markdown_summary_report(
+    report: RiskReport,
+    base_ref: str | None = None,
+) -> str:
+    lines: list[str] = [
+        "# PR Risk Lens Summary",
+        "",
+        "Transparent risk scoring for Python pull requests.",
+        "",
+        "## Mode",
+        "",
+    ]
+
+    if base_ref:
+        lines.append(f"Branch comparison against `{base_ref}`.")
+    else:
+        lines.append("Local working tree.")
+
+    lines.extend(
+        [
+            "",
+            "## Summary",
+            "",
+        ]
+    )
+    lines.extend(_build_markdown_summary_table(report))
+
+    lines.extend(
+        [
+            "## Review guidance",
+            "",
+            _build_markdown_review_guidance(report),
+            "",
+            "## Risk factors",
+            "",
+        ]
+    )
+
+    lines.extend(_build_markdown_risk_factor_lines(report))
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_markdown_summary_table(report: RiskReport) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Risk score | {report.risk_score}/100 |",
+        f"| Risk level | {report.risk_level} |",
+        f"| Changed files | {len(report.changed_files)} |",
+        f"| Lines added | {report.total_additions} |",
+        f"| Lines deleted | {report.total_deletions} |",
+        f"| Test files changed | {_yes_no(report.has_test_changes)} |",
+        f"| Sensitive files changed | {_yes_no(report.has_sensitive_changes)} |",
+        "",
+    ]
+
+
+def _build_markdown_review_guidance(report: RiskReport) -> str:
+    if not report.has_changes:
+        return "No changed files were detected."
+
+    if report.risk_level == "High":
+        return (
+        "Review carefully before merging. "
+        "Consider splitting the change or adding focused tests."
+    )
+
+    if report.risk_level == "Medium":
+        return "Review the changed areas and risk factors before merging."
+
+    if report.risk_level == "Low":
+        return "Risk appears low, but review the listed changes normally."
+
+    return "No meaningful risk factors were detected."
+
+
+def _build_markdown_risk_factor_lines(report: RiskReport) -> list[str]:
+    if not report.risk_factors:
+        return ["No risk factors detected."]
+
+    return [f"- {factor.label} `+{factor.points}`" for factor in report.risk_factors]
 
 
 def _build_markdown_file_section(title: str, file_paths: list[str]) -> list[str]:

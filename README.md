@@ -10,9 +10,9 @@ The goal is not to block developers with a black-box score. The goal is to make 
 
 ## Project links
 
-- [Changelog](CHANGELOG.md)
-- [Contributing guide](CONTRIBUTING.md)
-- [Releases](https://github.com/Lokmir/pr-risk-lens/releases)
+* [Changelog](CHANGELOG.md)
+* [Contributing guide](CONTRIBUTING.md)
+* [Releases](https://github.com/Lokmir/pr-risk-lens/releases)
 
 ## Features
 
@@ -25,10 +25,11 @@ PR Risk Lens can:
 * detect test file changes;
 * detect risk-sensitive files;
 * compute a transparent risk score;
-* output text, JSON, or Markdown reports;
+* output text, JSON, Markdown reports, or short Markdown summaries;
 * write reports to files;
 * fail with a non-zero exit code when the score exceeds a maximum threshold;
-* run in CI workflows.
+* run in CI workflows;
+* generate Markdown summaries suitable for pull request comments.
 
 ## Installation for development
 
@@ -74,16 +75,28 @@ Compare the current branch against `main`:
 pr-risk-lens analyze --base main
 ```
 
-Generate a Markdown report:
+Generate a full Markdown report:
 
 ```powershell
 pr-risk-lens analyze --format markdown
+```
+
+Generate a short Markdown summary:
+
+```powershell
+pr-risk-lens analyze --format markdown --summary
 ```
 
 Write a Markdown report to a file:
 
 ```powershell
 pr-risk-lens analyze --format markdown --output pr-risk-report.md
+```
+
+Write a Markdown summary to a file:
+
+```powershell
+pr-risk-lens analyze --format markdown --summary --output pr-risk-summary.md
 ```
 
 Fail when the risk score is above a threshold:
@@ -147,6 +160,18 @@ Text output is the default:
 pr-risk-lens analyze
 ```
 
+JSON output is useful for automation:
+
+```powershell
+pr-risk-lens analyze --format json
+```
+
+Markdown output is useful for CI reports, pull request comments, and generated artifacts:
+
+```powershell
+pr-risk-lens analyze --format markdown
+```
+
 The legacy `--json` flag is still supported for backwards compatibility:
 
 ```powershell
@@ -159,10 +184,79 @@ You can write any format to a file:
 pr-risk-lens analyze --format markdown --output pr-risk-report.md
 ```
 
+```powershell
+pr-risk-lens analyze --format json --output pr-risk-report.json
+```
+
+## Markdown summaries
+
+A short Markdown summary can be generated with `--summary`.
+
+```powershell
+pr-risk-lens analyze --format markdown --summary
+```
+
+This is useful for pull request comments because it keeps the output compact.
+
+The `--summary` option is only supported with Markdown output:
+
+```powershell
+pr-risk-lens analyze --format markdown --summary
+```
+
 ## Example Markdown output
 
 ```markdown
 # PR Risk Lens Report
+
+Transparent risk scoring for Python pull requests.
+
+This report is deterministic, rule-based, and generated locally.
+
+## Mode
+
+Branch comparison against `main`.
+
+## Summary
+
+| Metric | Value |
+| --- | --- |
+| Risk score | 45/100 |
+| Risk level | Medium |
+| Changed files | 3 |
+| Lines added | 120 |
+| Lines deleted | 18 |
+| Test files changed | Yes |
+| Sensitive files changed | No |
+
+## Review guidance
+
+Review the changed areas and risk factors before merging.
+
+## Changed files
+
+- `src/pr_risk_lens/cli.py`
+- `src/pr_risk_lens/report.py`
+- `tests/test_cli.py`
+
+## Test files
+
+- `tests/test_cli.py`
+
+## Sensitive files
+
+None.
+
+## Risk factors
+
+- Change size: 138 changed lines `+25`
+- Files changed: 3 files `+5`
+```
+
+## Example Markdown summary output
+
+```markdown
+# PR Risk Lens Summary
 
 Transparent risk scoring for Python pull requests.
 
@@ -172,19 +266,19 @@ Branch comparison against `main`.
 
 ## Summary
 
-- **Risk score:** 45/100
-- **Risk level:** Medium
-- **Changed files:** 3
-- **Lines added:** 120
-- **Lines deleted:** 18
-- **Test files changed:** Yes
-- **Sensitive files changed:** No
+| Metric | Value |
+| --- | --- |
+| Risk score | 45/100 |
+| Risk level | Medium |
+| Changed files | 3 |
+| Lines added | 120 |
+| Lines deleted | 18 |
+| Test files changed | Yes |
+| Sensitive files changed | No |
 
-## Changed files
+## Review guidance
 
-- `src/pr_risk_lens/cli.py`
-- `src/pr_risk_lens/report.py`
-- `tests/test_cli.py`
+Review the changed areas and risk factors before merging.
 
 ## Risk factors
 
@@ -282,12 +376,78 @@ This workflow:
 * generates a Markdown report;
 * stores the report as a downloadable GitHub Actions artifact.
 
+### Comment pull requests with a Markdown summary
+
+You can also generate a short Markdown summary and publish it as a pull request comment.
+
+```yaml
+name: PR Risk Lens Comment
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  risk-comment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PR Risk Lens
+        run: python -m pip install -e .
+
+      - name: Generate Markdown risk summary
+        run: |
+          pr-risk-lens analyze \
+            --base origin/main \
+            --format markdown \
+            --summary \
+            --output pr-risk-summary.md
+
+      - name: Comment pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --body-file pr-risk-summary.md \
+            --edit-last \
+            --create-if-none
+```
+
+This workflow:
+
+* compares the pull request branch against `origin/main`;
+* generates a short Markdown summary;
+* creates or updates a pull request comment with the latest summary.
+
+Repository or organization settings may restrict comment permissions for some pull requests, especially pull requests from forks.
+
 ## Maximum score threshold
 
 PR Risk Lens can fail the command when the risk score is greater than a chosen threshold:
 
 ```powershell
 pr-risk-lens analyze --max-score 60
+```
+
+You can combine it with branch comparison:
+
+```powershell
+pr-risk-lens analyze --base main --max-score 60
 ```
 
 Behavior:
@@ -393,7 +553,7 @@ Git output is normalized to keep reports stable:
 | --------: | --------------------------------- |
 |         0 | Analysis succeeded                |
 |         1 | Risk score exceeded `--max-score` |
-|         2 | Git command error                 |
+|         2 | Git command or CLI usage error    |
 
 ## Development
 
