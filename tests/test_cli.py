@@ -226,3 +226,19 @@ def test_analyze_command_displays_clean_git_error(monkeypatch) -> None:
     assert result.exit_code == 2
     assert "Error:" in result.output
     assert "Not inside a Git repository." in result.output
+
+
+def test_version_option_displays_installed_version(monkeypatch) -> None:
+    def fake_get_package_version(package_name: str) -> str:
+        assert package_name == "pr-risk-lens"
+        return "0.1.0"
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_package_version",
+        fake_get_package_version,
+    )
+
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert "PR Risk Lens 0.1.0" in result.output

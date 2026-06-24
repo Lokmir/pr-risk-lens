@@ -1,4 +1,6 @@
 import json
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_package_version
 
 import typer
 from rich.console import Console
@@ -6,20 +8,33 @@ from rich.console import Console
 from pr_risk_lens.git import GitCommandError, get_changed_files, get_diff_stats
 from pr_risk_lens.report import RiskReport, build_risk_report
 
+PACKAGE_NAME = "pr-risk-lens"
+APP_NAME = "PR Risk Lens"
+
 app = typer.Typer(
     help="Transparent risk scoring for Python pull requests.",
     no_args_is_help=True,
+    invoke_without_command=True,
 )
 
 console = Console()
 
 
 @app.callback()
-def main() -> None:
+def main(
+    show_version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show the installed version and exit.",
+        is_eager=True,
+    ),
+) -> None:
     """
     PR Risk Lens command line interface.
     """
-    pass
+    if show_version:
+        console.print(f"{APP_NAME} {_get_installed_version()}")
+        raise typer.Exit()
 
 
 @app.command()
@@ -62,6 +77,13 @@ def analyze(
         max_score=max_score,
         json_output=json_output,
     )
+
+
+def _get_installed_version() -> str:
+    try:
+        return get_package_version(PACKAGE_NAME)
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def _print_json_report(report: RiskReport) -> None:

@@ -38,3 +38,4 @@ jobs:
         run: |
           python -m pip install --force-reinstall dist/*.whl
           pr-risk-lens --help
+          pr-risk-lens --version
