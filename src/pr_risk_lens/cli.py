@@ -377,9 +377,9 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
 
     if report.risk_level == "High":
         return (
-        "Review carefully before merging. "
-        "Consider splitting the change or adding focused tests."
-    )
+            "Review carefully before merging. "
+            "Consider splitting the change or adding focused tests."
+        )
 
     if report.risk_level == "Medium":
         return "Review the changed areas and risk factors before merging."

@@ -394,6 +394,7 @@ def test_analyze_command_can_write_json_output_to_file(monkeypatch, tmp_path) ->
     assert '"changed_files"' in content
     assert '"risk"' in content
 
+
 def test_analyze_command_can_output_markdown_summary(monkeypatch) -> None:
     def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
         return [
