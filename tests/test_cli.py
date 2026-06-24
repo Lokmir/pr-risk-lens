@@ -307,3 +307,88 @@ def test_analyze_command_rejects_json_flag_with_format_option(monkeypatch) -> No
 
     assert result.exit_code == 2
     assert "Use either --json or --format, not both." in result.output
+
+
+def test_analyze_command_can_write_markdown_output_to_file(
+    monkeypatch, tmp_path
+) -> None:
+    output_file = tmp_path / "risk-report.md"
+
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return [
+            "README.md",
+            "tests/test_cli.py",
+        ]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [
+            DiffStat(file_path="README.md", additions=5, deletions=1),
+            DiffStat(file_path="tests/test_cli.py", additions=8, deletions=0),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "--format",
+            "markdown",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+
+    content = output_file.read_text(encoding="utf-8")
+
+    assert "# PR Risk Lens Report" in content
+    assert "- `README.md`" in content
+    assert "- `tests/test_cli.py`" in content
+
+
+def test_analyze_command_can_write_json_output_to_file(monkeypatch, tmp_path) -> None:
+    output_file = tmp_path / "risk-report.json"
+
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return ["README.md"]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [DiffStat(file_path="README.md", additions=5, deletions=1)]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "--format",
+            "json",
+            "--output",
+            str(output_file),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Report written to" in result.output
+
+    content = output_file.read_text(encoding="utf-8")
+
+    assert '"changed_files"' in content
+    assert '"risk"' in content

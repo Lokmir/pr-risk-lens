@@ -2,6 +2,7 @@ import json
 from enum import StrEnum
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_package_version
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -33,6 +34,13 @@ OUTPUT_FORMAT_OPTION = typer.Option(
     help="Output format: text, json, or markdown.",
 )
 
+OUTPUT_FILE_OPTION = typer.Option(
+    None,
+    "--output",
+    "-o",
+    help="Write the report to a file instead of printing it to the terminal.",
+)
+
 
 @app.callback()
 def main(
@@ -59,6 +67,7 @@ def analyze(
         help="Compare the current branch against a base ref, for example main.",
     ),
     output_format: OutputFormat = OUTPUT_FORMAT_OPTION,
+    output_file: Path | None = OUTPUT_FILE_OPTION,
     json_output: bool = typer.Option(
         False,
         "--json",
@@ -86,10 +95,15 @@ def analyze(
         raise typer.Exit(code=2) from error
 
     report = build_risk_report(changed_files, diff_stats)
-
-    _print_report(
+    report_output = _build_report_output(
         report=report,
         base_ref=base,
+        output_format=output_format,
+    )
+
+    _write_or_print_report(
+        report_output=report_output,
+        output_file=output_file,
         output_format=output_format,
     )
 
@@ -121,28 +135,108 @@ def _get_installed_version() -> str:
         return "unknown"
 
 
-def _print_report(
+def _build_report_output(
     report: RiskReport,
     base_ref: str | None,
     output_format: OutputFormat,
-) -> None:
+) -> str:
     if output_format == OutputFormat.json:
-        _print_json_report(report)
+        return _build_json_report(report)
+
+    if output_format == OutputFormat.markdown:
+        return _build_markdown_report(report, base_ref=base_ref)
+
+    return _build_text_report(report, base_ref=base_ref)
+
+
+def _write_or_print_report(
+    report_output: str,
+    output_file: Path | None,
+    output_format: OutputFormat,
+) -> None:
+    if output_file:
+        output_file.write_text(report_output, encoding="utf-8")
+        console.print(f"Report written to {output_file}")
         return
 
     if output_format == OutputFormat.markdown:
-        _print_markdown_report(report, base_ref=base_ref)
+        console.print(report_output, markup=False)
         return
 
-    _print_text_report(report, base_ref=base_ref)
+    console.print(report_output)
 
 
-def _print_json_report(report: RiskReport) -> None:
-    console.print(json.dumps(report.to_dict(), indent=2))
+def _build_json_report(report: RiskReport) -> str:
+    return json.dumps(report.to_dict(), indent=2)
 
 
-def _print_markdown_report(report: RiskReport, base_ref: str | None = None) -> None:
-    console.print(_build_markdown_report(report, base_ref=base_ref), markup=False)
+def _build_text_report(report: RiskReport, base_ref: str | None = None) -> str:
+    lines: list[str] = [
+        "PR Risk Lens",
+        "Transparent risk scoring for Python pull requests.",
+        "",
+    ]
+
+    if base_ref:
+        lines.append(f"Mode: branch comparison against {base_ref}")
+    else:
+        lines.append("Mode: local working tree")
+
+    lines.append("")
+
+    if not report.has_changes:
+        lines.append("No changed files detected.")
+        return "\n".join(lines)
+
+    lines.append("Changed files:")
+
+    for file_path in report.changed_files:
+        lines.append(f"- {file_path}")
+
+    lines.extend(
+        [
+            "",
+            "Diff stats:",
+            f"Lines added: {report.total_additions}",
+            f"Lines deleted: {report.total_deletions}",
+            "",
+            "Tests:",
+            f"Test files changed: {_yes_no(report.has_test_changes)}",
+        ]
+    )
+
+    for file_path in report.test_files:
+        lines.append(f"- {file_path}")
+
+    lines.extend(
+        [
+            "",
+            "Sensitive files:",
+            f"Sensitive files changed: {_yes_no(report.has_sensitive_changes)}",
+        ]
+    )
+
+    for file_path in report.sensitive_files:
+        lines.append(f"- {file_path}")
+
+    lines.extend(
+        [
+            "",
+            "Risk:",
+            f"Risk score: {report.risk_score}/100",
+            f"Risk level: {report.risk_level}",
+            "",
+            "Risk factors:",
+        ]
+    )
+
+    if report.risk_factors:
+        for factor in report.risk_factors:
+            lines.append(f"- {factor.label} (+{factor.points})")
+    else:
+        lines.append("No risk factors detected.")
+
+    return "\n".join(lines)
 
 
 def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> str:
@@ -224,60 +318,6 @@ def _build_markdown_file_section(title: str, file_paths: list[str]) -> list[str]
 
 def _yes_no(value: bool) -> str:
     return "Yes" if value else "No"
-
-
-def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
-    console.print("[bold]PR Risk Lens[/bold]")
-    console.print("Transparent risk scoring for Python pull requests.")
-    console.print()
-
-    if base_ref:
-        console.print(f"Mode: branch comparison against {base_ref}")
-    else:
-        console.print("Mode: local working tree")
-
-    console.print()
-
-    if not report.has_changes:
-        console.print("No changed files detected.")
-        return
-
-    console.print("[bold]Changed files:[/bold]")
-
-    for file_path in report.changed_files:
-        console.print(f"- {file_path}")
-
-    console.print()
-    console.print("[bold]Diff stats:[/bold]")
-    console.print(f"Lines added: {report.total_additions}")
-    console.print(f"Lines deleted: {report.total_deletions}")
-
-    console.print()
-    console.print("[bold]Tests:[/bold]")
-    console.print(f"Test files changed: {'Yes' if report.has_test_changes else 'No'}")
-
-    for file_path in report.test_files:
-        console.print(f"- {file_path}")
-
-    console.print()
-    console.print("[bold]Sensitive files:[/bold]")
-    console.print(
-        f"Sensitive files changed: {'Yes' if report.has_sensitive_changes else 'No'}"
-    )
-
-    for file_path in report.sensitive_files:
-        console.print(f"- {file_path}")
-
-    console.print()
-    console.print("[bold]Risk:[/bold]")
-    console.print(f"Risk score: {report.risk_score}/100")
-    console.print(f"Risk level: {report.risk_level}")
-
-    console.print()
-    console.print("[bold]Risk factors:[/bold]")
-
-    for factor in report.risk_factors:
-        console.print(f"- {factor.label} (+{factor.points})")
 
 
 def _exit_if_score_is_too_high(
