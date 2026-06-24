@@ -279,7 +279,7 @@ This score is not a quality judgment. It is a review signal based on change size
 ```markdown
 ## PR Risk Lens Summary
 
-**Risk:** Medium — **Score:** 45/100
+**Risk:** Medium - **Score:** 45/100
 
 Review the changed areas and risk factors before merging.
 
