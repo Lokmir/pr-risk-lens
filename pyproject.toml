@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "pr-risk-lens"
@@ -8,13 +8,38 @@ version = "0.1.0"
 description = "Transparent risk scoring for Python pull requests."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+authors = [
+    { name = "Mehdi Harrache" }
+]
+keywords = [
+    "pull-request",
+    "risk",
+    "cli",
+    "git",
+    "ci",
+    "python",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
 dependencies = [
-    "typer",
     "rich",
+    "typer",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "build",
     "pytest",
     "ruff",
 ]
@@ -22,8 +47,13 @@ dev = [
 [project.scripts]
 pr-risk-lens = "pr_risk_lens.cli:app"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/pr_risk_lens"]
+[project.urls]
+Homepage = "https://github.com/Lokmir/pr-risk-lens"
+Repository = "https://github.com/Lokmir/pr-risk-lens"
+Issues = "https://github.com/Lokmir/pr-risk-lens/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 88
