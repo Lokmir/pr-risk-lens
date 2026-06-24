@@ -382,7 +382,14 @@ def _build_markdown_summary_report(
 
 
 def _build_markdown_verdict(report: RiskReport) -> str:
-    return f"**Risk:** {report.risk_level} — **Score:** {report.risk_score}/100"
+    return f"**Risk:** {report.risk_level} - **Score:** {report.risk_score}/100"
+
+
+def _has_python_source_without_test_changes(report: RiskReport) -> bool:
+    return any(
+        factor.label == "Python source changes without test changes"
+        for factor in report.risk_factors
+    )
 
 
 def _build_markdown_summary_table(report: RiskReport) -> list[str]:
@@ -417,6 +424,8 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
     if not report.has_changes:
         return "No changed files were detected."
 
+    has_missing_test_signal = _has_python_source_without_test_changes(report)
+
     if report.risk_level == "High":
         return (
             "Review carefully before merging. "
@@ -424,9 +433,21 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
         )
 
     if report.risk_level == "Medium":
+        if has_missing_test_signal:
+            return (
+                "Review the changed areas and risk factors before merging. "
+                "Check whether focused tests should be added."
+            )
+
         return "Review the changed areas and risk factors before merging."
 
     if report.risk_level == "Low":
+        if has_missing_test_signal:
+            return (
+                "Risk appears low, but check whether tests are needed "
+                "for the Python source change."
+            )
+
         return "Risk appears low, but review the listed changes normally."
 
     return "No meaningful risk factors were detected."
@@ -454,6 +475,8 @@ def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
 
     if report.has_test_changes:
         focus_lines.append("- Test files changed.")
+    elif _has_python_source_without_test_changes(report):
+        focus_lines.append("- No test file changes detected for Python source changes.")
     else:
         focus_lines.append("- No test file changes detected.")
 

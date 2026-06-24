@@ -219,7 +219,7 @@ This report is deterministic, rule-based, and generated locally.
 
 ## Verdict
 
-**Risk:** Medium — **Score:** 45/100
+**Risk:** Medium - **Score:** 45/100
 
 Review the changed areas and risk factors before merging.
 
