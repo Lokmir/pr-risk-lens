@@ -4,6 +4,21 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+## v0.3.2 - 2026-06-24
+
+### Added
+
+* Review-focused Markdown summary designed for pull request comments.
+* Review focus section in Markdown reports and summaries.
+* Generated PR Risk Lens report files in `.gitignore`.
+
+### Changed
+
+* Made full Markdown reports and Markdown summaries more distinct.
+* Improved full Markdown reports with a verdict, detailed summary table, risk factor table, and interpretation section.
+* Improved Markdown summaries with a compact decision-oriented layout.
+* Improved risk factor wording with singular and plural labels such as `1 file` and `2 files`.
+
 ## v0.3.1 - 2026-06-24
 
 ### Added

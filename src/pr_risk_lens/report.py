@@ -1,8 +1,18 @@
 from dataclasses import dataclass
-from pathlib import PurePosixPath
-from typing import Any
 
 from pr_risk_lens.git import DiffStat
+
+SENSITIVE_FILE_NAMES = {
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-dev.txt",
+    "setup.py",
+    "setup.cfg",
+    "tox.ini",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+}
 
 
 @dataclass(frozen=True)
@@ -10,27 +20,31 @@ class RiskFactor:
     label: str
     points: int
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "label": self.label,
-            "points": self.points,
-        }
-
 
 @dataclass(frozen=True)
 class RiskReport:
     changed_files: list[str]
+    diff_stats: list[DiffStat]
     test_files: list[str]
     sensitive_files: list[str]
-    total_additions: int
-    total_deletions: int
-    risk_score: int
-    risk_level: str
     risk_factors: list[RiskFactor]
+    risk_score: int
 
     @property
     def has_changes(self) -> bool:
         return bool(self.changed_files)
+
+    @property
+    def total_additions(self) -> int:
+        return sum(stat.additions for stat in self.diff_stats)
+
+    @property
+    def total_deletions(self) -> int:
+        return sum(stat.deletions for stat in self.diff_stats)
+
+    @property
+    def total_changed_lines(self) -> int:
+        return self.total_additions + self.total_deletions
 
     @property
     def has_test_changes(self) -> bool:
@@ -41,10 +55,19 @@ class RiskReport:
         return bool(self.sensitive_files)
 
     @property
-    def total_changed_lines(self) -> int:
-        return self.total_additions + self.total_deletions
+    def risk_level(self) -> str:
+        if self.risk_score == 0:
+            return "None"
 
-    def to_dict(self) -> dict[str, Any]:
+        if self.risk_score <= 30:
+            return "Low"
+
+        if self.risk_score <= 60:
+            return "Medium"
+
+        return "High"
+
+    def to_dict(self) -> dict[str, object]:
         return {
             "changed_files": self.changed_files,
             "test_changes": {
@@ -63,7 +86,13 @@ class RiskReport:
             "risk": {
                 "score": self.risk_score,
                 "level": self.risk_level,
-                "factors": [factor.to_dict() for factor in self.risk_factors],
+                "factors": [
+                    {
+                        "label": factor.label,
+                        "points": factor.points,
+                    }
+                    for factor in self.risk_factors
+                ],
             },
         }
 
@@ -72,172 +101,137 @@ def build_risk_report(
     changed_files: list[str],
     diff_stats: list[DiffStat],
 ) -> RiskReport:
-    """
-    Build a basic risk report from Git data.
-
-    The score is intentionally simple and transparent.
-    Each risk factor explains how many points it adds.
-    """
-    total_additions = sum(stat.additions for stat in diff_stats)
-    total_deletions = sum(stat.deletions for stat in diff_stats)
-    total_changed_lines = total_additions + total_deletions
-
-    test_files = [file_path for file_path in changed_files if _is_test_file(file_path)]
-
-    sensitive_files = [
-        file_path for file_path in changed_files if _is_sensitive_file(file_path)
-    ]
-
-    has_python_source_changes = any(
-        _is_python_source_file(file_path) for file_path in changed_files
+    test_files = sorted(
+        file_path for file_path in changed_files if is_test_file(file_path)
+    )
+    sensitive_files = sorted(
+        file_path for file_path in changed_files if is_sensitive_file(file_path)
     )
 
     risk_factors = _build_risk_factors(
-        changed_file_count=len(changed_files),
-        total_changed_lines=total_changed_lines,
-        has_python_source_changes=has_python_source_changes,
-        has_test_changes=bool(test_files),
-        has_sensitive_changes=bool(sensitive_files),
+        changed_files=changed_files,
+        diff_stats=diff_stats,
+        test_files=test_files,
+        sensitive_files=sensitive_files,
     )
 
-    risk_score = sum(factor.points for factor in risk_factors)
+    risk_score = min(sum(factor.points for factor in risk_factors), 100)
 
     return RiskReport(
         changed_files=changed_files,
+        diff_stats=diff_stats,
         test_files=test_files,
         sensitive_files=sensitive_files,
-        total_additions=total_additions,
-        total_deletions=total_deletions,
-        risk_score=risk_score,
-        risk_level=_risk_level_from_score(risk_score),
         risk_factors=risk_factors,
+        risk_score=risk_score,
+    )
+
+
+def is_test_file(file_path: str) -> bool:
+    normalized_path = _normalize_path(file_path)
+    path_parts = normalized_path.split("/")
+    file_name = path_parts[-1]
+
+    return (
+        "tests" in path_parts
+        or file_name.startswith("test_")
+        or file_name.endswith("_test.py")
+    )
+
+
+def is_sensitive_file(file_path: str) -> bool:
+    normalized_path = _normalize_path(file_path)
+
+    if normalized_path in SENSITIVE_FILE_NAMES:
+        return True
+
+    return normalized_path.startswith(".github/workflows/") and (
+        normalized_path.endswith(".yml") or normalized_path.endswith(".yaml")
     )
 
 
 def _build_risk_factors(
-    changed_file_count: int,
-    total_changed_lines: int,
-    has_python_source_changes: bool,
-    has_test_changes: bool,
-    has_sensitive_changes: bool,
+    changed_files: list[str],
+    diff_stats: list[DiffStat],
+    test_files: list[str],
+    sensitive_files: list[str],
 ) -> list[RiskFactor]:
-    factors: list[RiskFactor] = []
+    if not changed_files:
+        return []
 
-    if changed_file_count == 0:
-        return factors
+    risk_factors: list[RiskFactor] = []
+    total_changed_lines = sum(stat.additions + stat.deletions for stat in diff_stats)
 
-    factors.append(_change_size_factor(total_changed_lines))
-    factors.append(_changed_files_factor(changed_file_count))
+    risk_factors.append(_build_change_size_factor(total_changed_lines))
+    risk_factors.append(_build_changed_files_factor(len(changed_files)))
 
-    if has_python_source_changes and not has_test_changes:
-        factors.append(
+    has_python_source_changes = any(
+        file_path.endswith(".py") and not is_test_file(file_path)
+        for file_path in changed_files
+    )
+
+    if has_python_source_changes and not test_files:
+        risk_factors.append(
             RiskFactor(
-                label="No test changes detected for Python code changes",
+                label="Python source changes without test changes",
                 points=10,
             )
         )
 
-    if has_sensitive_changes:
-        factors.append(
+    if sensitive_files:
+        risk_factors.append(
             RiskFactor(
                 label="Risk-sensitive files changed",
                 points=10,
             )
         )
 
-    return factors
+    return risk_factors
 
 
-def _change_size_factor(total_changed_lines: int) -> RiskFactor:
+def _build_change_size_factor(total_changed_lines: int) -> RiskFactor:
     if total_changed_lines <= 50:
-        return RiskFactor(
-            label=f"Change size: {total_changed_lines} changed lines",
-            points=10,
-        )
-
-    if total_changed_lines <= 200:
-        return RiskFactor(
-            label=f"Change size: {total_changed_lines} changed lines",
-            points=25,
-        )
+        points = 10
+    elif total_changed_lines <= 200:
+        points = 25
+    else:
+        points = 40
 
     return RiskFactor(
-        label=f"Change size: {total_changed_lines} changed lines",
-        points=40,
+        label=(
+            f"Change size: {total_changed_lines} "
+            f"{_pluralize(total_changed_lines, 'changed line')}"
+        ),
+        points=points,
     )
 
 
-def _changed_files_factor(changed_file_count: int) -> RiskFactor:
+def _build_changed_files_factor(changed_file_count: int) -> RiskFactor:
     if changed_file_count <= 3:
-        return RiskFactor(
-            label=f"Files changed: {changed_file_count} files",
-            points=5,
-        )
-
-    if changed_file_count <= 10:
-        return RiskFactor(
-            label=f"Files changed: {changed_file_count} files",
-            points=15,
-        )
+        points = 5
+    elif changed_file_count <= 10:
+        points = 15
+    else:
+        points = 25
 
     return RiskFactor(
-        label=f"Files changed: {changed_file_count} files",
-        points=25,
+        label=(
+            f"Files changed: {changed_file_count} "
+            f"{_pluralize(changed_file_count, 'file')}"
+        ),
+        points=points,
     )
 
 
-def _is_python_source_file(file_path: str) -> bool:
-    return file_path.endswith(".py") and not _is_test_file(file_path)
+def _normalize_path(file_path: str) -> str:
+    return file_path.replace("\\", "/")
 
 
-def _is_test_file(file_path: str) -> bool:
-    path = PurePosixPath(file_path.replace("\\", "/"))
-    file_name = path.name
+def _pluralize(count: int, singular: str, plural: str | None = None) -> str:
+    if count == 1:
+        return singular
 
-    return (
-        "tests" in path.parts
-        or file_name.startswith("test_")
-        or file_name.endswith("_test.py")
-    )
+    if plural is not None:
+        return plural
 
-
-def _is_sensitive_file(file_path: str) -> bool:
-    path = PurePosixPath(file_path.replace("\\", "/"))
-    file_name = path.name
-
-    sensitive_file_names = {
-        "pyproject.toml",
-        "requirements.txt",
-        "requirements-dev.txt",
-        "setup.py",
-        "setup.cfg",
-        "tox.ini",
-        "Dockerfile",
-        "docker-compose.yml",
-        "docker-compose.yaml",
-    }
-
-    if file_name in sensitive_file_names:
-        return True
-
-    if (
-        len(path.parts) >= 3
-        and path.parts[0] == ".github"
-        and path.parts[1] == "workflows"
-    ):
-        return file_name.endswith((".yml", ".yaml"))
-
-    return False
-
-
-def _risk_level_from_score(score: int) -> str:
-    if score == 0:
-        return "None"
-
-    if score <= 30:
-        return "Low"
-
-    if score <= 60:
-        return "Medium"
-
-    return "High"
+    return f"{singular}s"

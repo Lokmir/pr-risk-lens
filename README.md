@@ -196,13 +196,17 @@ A short Markdown summary can be generated with `--summary`.
 pr-risk-lens analyze --format markdown --summary
 ```
 
-This is useful for pull request comments because it keeps the output compact.
+This is useful for pull request comments because it keeps the output compact and focused on review decisions.
 
-The `--summary` option is only supported with Markdown output:
+The summary is intentionally shorter than the full Markdown report. It highlights:
 
-```powershell
-pr-risk-lens analyze --format markdown --summary
-```
+* the risk level and score;
+* the review guidance;
+* the main review focus;
+* key metrics;
+* risk factors.
+
+The `--summary` option is only supported with Markdown output.
 
 ## Example Markdown output
 
@@ -212,6 +216,20 @@ pr-risk-lens analyze --format markdown --summary
 Transparent risk scoring for Python pull requests.
 
 This report is deterministic, rule-based, and generated locally.
+
+## Verdict
+
+**Risk:** Medium — **Score:** 45/100
+
+Review the changed areas and risk factors before merging.
+
+## Review focus
+
+- Medium-risk change: review the impacted areas.
+- 3 changed files.
+- 138 changed lines.
+- Test files changed.
+- No sensitive files changed.
 
 ## Mode
 
@@ -226,12 +244,9 @@ Branch comparison against `main`.
 | Changed files | 3 |
 | Lines added | 120 |
 | Lines deleted | 18 |
+| Lines changed | 138 |
 | Test files changed | Yes |
 | Sensitive files changed | No |
-
-## Review guidance
-
-Review the changed areas and risk factors before merging.
 
 ## Changed files
 
@@ -248,6 +263,46 @@ Review the changed areas and risk factors before merging.
 None.
 
 ## Risk factors
+
+| Factor | Points |
+| --- | ---: |
+| Change size: 138 changed lines | +25 |
+| Files changed: 3 files | +5 |
+
+## Interpretation
+
+This score is not a quality judgment. It is a review signal based on change size, file count, test coverage signals, and sensitive file changes.
+```
+
+## Example Markdown summary output
+
+```markdown
+## PR Risk Lens Summary
+
+**Risk:** Medium — **Score:** 45/100
+
+Review the changed areas and risk factors before merging.
+
+_Mode: branch comparison against `main`._
+
+### Review focus
+
+- Medium-risk change: review the impacted areas.
+- 3 changed files.
+- 138 changed lines.
+- Test files changed.
+- No sensitive files changed.
+
+### Key metrics
+
+| Metric | Value |
+| --- | --- |
+| Changed files | 3 |
+| Lines changed | 138 |
+| Test files changed | Yes |
+| Sensitive files changed | No |
+
+### Risk factors
 
 - Change size: 138 changed lines `+25`
 - Files changed: 3 files `+5`

@@ -8,12 +8,16 @@ from pr_risk_lens.git import DiffStat, GitCommandError
 runner = CliRunner()
 
 
-def test_analyze_command_displays_project_name(monkeypatch) -> None:
+def _mock_git_changes(
+    monkeypatch,
+    changed_files: list[str],
+    diff_stats: list[DiffStat],
+) -> None:
     def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return []
+        return changed_files
 
     def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return []
+        return diff_stats
 
     monkeypatch.setattr(
         "pr_risk_lens.cli.get_changed_files",
@@ -22,6 +26,14 @@ def test_analyze_command_displays_project_name(monkeypatch) -> None:
     monkeypatch.setattr(
         "pr_risk_lens.cli.get_diff_stats",
         fake_get_diff_stats,
+    )
+
+
+def test_analyze_command_displays_project_name(monkeypatch) -> None:
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[],
+        diff_stats=[],
     )
 
     result = runner.invoke(app, ["analyze"])
@@ -33,23 +45,18 @@ def test_analyze_command_displays_project_name(monkeypatch) -> None:
 
 
 def test_analyze_command_displays_changed_files(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["README.md", "src/pr_risk_lens/cli.py", "tests/test_cli.py"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
+            "README.md",
+            "src/pr_risk_lens/cli.py",
+            "tests/test_cli.py",
+        ],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=2),
             DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=1),
             DiffStat(file_path="tests/test_cli.py", additions=5, deletions=0),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze"])
@@ -70,22 +77,16 @@ def test_analyze_command_displays_changed_files(monkeypatch) -> None:
 
 
 def test_analyze_command_can_output_json(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["README.md", "tests/test_readme.py"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
+            "README.md",
+            "tests/test_readme.py",
+        ],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=2),
             DiffStat(file_path="tests/test_readme.py", additions=3, deletions=1),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze", "--json"])
@@ -136,23 +137,18 @@ def test_analyze_command_accepts_base_option(monkeypatch) -> None:
 
 
 def test_analyze_command_displays_sensitive_files(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["pyproject.toml", "src/pr_risk_lens/cli.py", "tests/test_cli.py"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
+            "pyproject.toml",
+            "src/pr_risk_lens/cli.py",
+            "tests/test_cli.py",
+        ],
+        diff_stats=[
             DiffStat(file_path="pyproject.toml", additions=2, deletions=1),
             DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=1),
             DiffStat(file_path="tests/test_cli.py", additions=5, deletions=0),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze"])
@@ -164,21 +160,12 @@ def test_analyze_command_displays_sensitive_files(monkeypatch) -> None:
 
 
 def test_analyze_command_succeeds_when_score_is_under_max_score(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["README.md"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["README.md"],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=2),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze", "--max-score", "20"])
@@ -188,21 +175,12 @@ def test_analyze_command_succeeds_when_score_is_under_max_score(monkeypatch) -> 
 
 
 def test_analyze_command_fails_when_score_exceeds_max_score(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["README.md"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["README.md"],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=2),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze", "--max-score", "10"])
@@ -245,55 +223,45 @@ def test_version_option_displays_installed_version(monkeypatch) -> None:
 
 
 def test_analyze_command_can_output_markdown(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
             "README.md",
             "src/pr_risk_lens/cli.py",
             "tests/test_cli.py",
-        ]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+        ],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=1),
             DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
             DiffStat(file_path="tests/test_cli.py", additions=8, deletions=0),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze", "--format", "markdown"])
 
     assert result.exit_code == 0
     assert "# PR Risk Lens Report" in result.output
+    assert "## Verdict" in result.output
+    assert "**Risk:** Low" in result.output
+    assert "**Score:** 15/100" in result.output
+    assert "## Review focus" in result.output
     assert "## Summary" in result.output
-    assert "| Risk score |" in result.output
-    assert "## Review guidance" in result.output
+    assert "| Lines changed | 26 |" in result.output
+    assert "## Changed files" in result.output
     assert "- `README.md`" in result.output
     assert "- `tests/test_cli.py`" in result.output
     assert "## Risk factors" in result.output
+    assert "| Factor | Points |" in result.output
+    assert "| Change size: 26 changed lines | +10 |" in result.output
 
 
 def test_analyze_command_can_output_json_with_format_option(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["README.md"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [DiffStat(file_path="README.md", additions=5, deletions=1)]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["README.md"],
+        diff_stats=[
+            DiffStat(file_path="README.md", additions=5, deletions=1),
+        ],
     )
 
     result = runner.invoke(app, ["analyze", "--format", "json"])
@@ -303,7 +271,7 @@ def test_analyze_command_can_output_json_with_format_option(monkeypatch) -> None
     assert '"risk"' in result.output
 
 
-def test_analyze_command_rejects_json_flag_with_format_option(monkeypatch) -> None:
+def test_analyze_command_rejects_json_flag_with_format_option() -> None:
     result = runner.invoke(app, ["analyze", "--json", "--format", "markdown"])
 
     assert result.exit_code == 2
@@ -311,29 +279,21 @@ def test_analyze_command_rejects_json_flag_with_format_option(monkeypatch) -> No
 
 
 def test_analyze_command_can_write_markdown_output_to_file(
-    monkeypatch, tmp_path
+    monkeypatch,
+    tmp_path,
 ) -> None:
     output_file = tmp_path / "risk-report.md"
 
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
             "README.md",
             "tests/test_cli.py",
-        ]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+        ],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=1),
             DiffStat(file_path="tests/test_cli.py", additions=8, deletions=0),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(
@@ -353,6 +313,9 @@ def test_analyze_command_can_write_markdown_output_to_file(
     content = output_file.read_text(encoding="utf-8")
 
     assert "# PR Risk Lens Report" in content
+    assert "## Verdict" in content
+    assert "## Review focus" in content
+    assert "## Changed files" in content
     assert "- `README.md`" in content
     assert "- `tests/test_cli.py`" in content
 
@@ -360,19 +323,12 @@ def test_analyze_command_can_write_markdown_output_to_file(
 def test_analyze_command_can_write_json_output_to_file(monkeypatch, tmp_path) -> None:
     output_file = tmp_path / "risk-report.json"
 
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return ["README.md"]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [DiffStat(file_path="README.md", additions=5, deletions=1)]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["README.md"],
+        diff_stats=[
+            DiffStat(file_path="README.md", additions=5, deletions=1),
+        ],
     )
 
     result = runner.invoke(
@@ -396,38 +352,33 @@ def test_analyze_command_can_write_json_output_to_file(monkeypatch, tmp_path) ->
 
 
 def test_analyze_command_can_output_markdown_summary(monkeypatch) -> None:
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
             "README.md",
             "src/pr_risk_lens/cli.py",
             "tests/test_cli.py",
-        ]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+        ],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=1),
             DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
             DiffStat(file_path="tests/test_cli.py", additions=8, deletions=0),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(app, ["analyze", "--format", "markdown", "--summary"])
 
     assert result.exit_code == 0
-    assert "# PR Risk Lens Summary" in result.output
-    assert "## Summary" in result.output
-    assert "| Risk score |" in result.output
-    assert "## Review guidance" in result.output
-    assert "## Risk factors" in result.output
+    assert "## PR Risk Lens Summary" in result.output
+    assert "# PR Risk Lens Report" not in result.output
+    assert "**Risk:** Low" in result.output
+    assert "**Score:** 15/100" in result.output
+    assert "### Review focus" in result.output
+    assert "### Key metrics" in result.output
+    assert "| Lines changed | 26 |" in result.output
+    assert "### Risk factors" in result.output
     assert "## Changed files" not in result.output
+    assert "Transparent risk scoring" not in result.output
 
 
 def test_analyze_command_rejects_summary_without_markdown() -> None:
@@ -443,25 +394,16 @@ def test_analyze_command_can_write_markdown_summary_to_file(
 ) -> None:
     output_file = tmp_path / "risk-summary.md"
 
-    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
-        return [
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=[
             "README.md",
             "tests/test_cli.py",
-        ]
-
-    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
-        return [
+        ],
+        diff_stats=[
             DiffStat(file_path="README.md", additions=5, deletions=1),
             DiffStat(file_path="tests/test_cli.py", additions=8, deletions=0),
-        ]
-
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_changed_files",
-        fake_get_changed_files,
-    )
-    monkeypatch.setattr(
-        "pr_risk_lens.cli.get_diff_stats",
-        fake_get_diff_stats,
+        ],
     )
 
     result = runner.invoke(
@@ -481,6 +423,9 @@ def test_analyze_command_can_write_markdown_summary_to_file(
 
     content = output_file.read_text(encoding="utf-8")
 
-    assert "# PR Risk Lens Summary" in content
-    assert "| Risk score |" in content
+    assert "## PR Risk Lens Summary" in content
+    assert "# PR Risk Lens Report" not in content
+    assert "**Risk:** Low" in content
+    assert "### Review focus" in content
+    assert "### Key metrics" in content
     assert "## Changed files" not in content

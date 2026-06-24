@@ -266,9 +266,25 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
         "",
         "This report is deterministic, rule-based, and generated locally.",
         "",
-        "## Mode",
+        "## Verdict",
+        "",
+        _build_markdown_verdict(report),
+        "",
+        _build_markdown_review_guidance(report),
+        "",
+        "## Review focus",
         "",
     ]
+
+    lines.extend(_build_markdown_review_focus_lines(report))
+
+    lines.extend(
+        [
+            "",
+            "## Mode",
+            "",
+        ]
+    )
 
     if base_ref:
         lines.append(f"Branch comparison against `{base_ref}`.")
@@ -283,15 +299,6 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
         ]
     )
     lines.extend(_build_markdown_summary_table(report))
-
-    lines.extend(
-        [
-            "## Review guidance",
-            "",
-            _build_markdown_review_guidance(report),
-            "",
-        ]
-    )
 
     lines.extend(_build_markdown_file_section("Changed files", report.changed_files))
     lines.extend(_build_markdown_file_section("Test files", report.test_files))
@@ -305,9 +312,21 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
             "",
         ]
     )
+    lines.extend(_build_markdown_risk_factor_table(report))
 
-    lines.extend(_build_markdown_risk_factor_lines(report))
-    lines.append("")
+    lines.extend(
+        [
+            "",
+            "## Interpretation",
+            "",
+            (
+                "This score is not a quality judgment. It is a review signal "
+                "based on change size, file count, test coverage signals, "
+                "and sensitive file changes."
+            ),
+            "",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -317,43 +336,53 @@ def _build_markdown_summary_report(
     base_ref: str | None = None,
 ) -> str:
     lines: list[str] = [
-        "# PR Risk Lens Summary",
+        "## PR Risk Lens Summary",
         "",
-        "Transparent risk scoring for Python pull requests.",
+        _build_markdown_verdict(report),
         "",
-        "## Mode",
+        _build_markdown_review_guidance(report),
         "",
     ]
 
     if base_ref:
-        lines.append(f"Branch comparison against `{base_ref}`.")
-    else:
-        lines.append("Local working tree.")
+        lines.extend(
+            [
+                f"_Mode: branch comparison against `{base_ref}`._",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "### Review focus",
+            "",
+        ]
+    )
+    lines.extend(_build_markdown_review_focus_lines(report))
 
     lines.extend(
         [
             "",
-            "## Summary",
+            "### Key metrics",
             "",
         ]
     )
-    lines.extend(_build_markdown_summary_table(report))
+    lines.extend(_build_markdown_compact_summary_table(report))
 
     lines.extend(
         [
-            "## Review guidance",
-            "",
-            _build_markdown_review_guidance(report),
-            "",
-            "## Risk factors",
+            "### Risk factors",
             "",
         ]
     )
-
     lines.extend(_build_markdown_risk_factor_lines(report))
     lines.append("")
 
     return "\n".join(lines)
+
+
+def _build_markdown_verdict(report: RiskReport) -> str:
+    return f"**Risk:** {report.risk_level} — **Score:** {report.risk_score}/100"
 
 
 def _build_markdown_summary_table(report: RiskReport) -> list[str]:
@@ -365,6 +394,19 @@ def _build_markdown_summary_table(report: RiskReport) -> list[str]:
         f"| Changed files | {len(report.changed_files)} |",
         f"| Lines added | {report.total_additions} |",
         f"| Lines deleted | {report.total_deletions} |",
+        f"| Lines changed | {report.total_changed_lines} |",
+        f"| Test files changed | {_yes_no(report.has_test_changes)} |",
+        f"| Sensitive files changed | {_yes_no(report.has_sensitive_changes)} |",
+        "",
+    ]
+
+
+def _build_markdown_compact_summary_table(report: RiskReport) -> list[str]:
+    return [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Changed files | {len(report.changed_files)} |",
+        f"| Lines changed | {report.total_changed_lines} |",
         f"| Test files changed | {_yes_no(report.has_test_changes)} |",
         f"| Sensitive files changed | {_yes_no(report.has_sensitive_changes)} |",
         "",
@@ -390,11 +432,64 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
     return "No meaningful risk factors were detected."
 
 
+def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
+    if not report.has_changes:
+        return ["- No changed files detected."]
+
+    focus_lines: list[str] = []
+
+    if report.risk_level == "High":
+        focus_lines.append("- High-risk change: review carefully before merging.")
+    elif report.risk_level == "Medium":
+        focus_lines.append("- Medium-risk change: review the impacted areas.")
+    elif report.risk_level == "Low":
+        focus_lines.append("- Low-risk change: review normally.")
+    else:
+        focus_lines.append("- No meaningful risk factors detected.")
+
+    focus_lines.append(f"- {_format_count(len(report.changed_files), 'changed file')}.")
+    focus_lines.append(
+        f"- {_format_count(report.total_changed_lines, 'changed line')}."
+    )
+
+    if report.has_test_changes:
+        focus_lines.append("- Test files changed.")
+    else:
+        focus_lines.append("- No test file changes detected.")
+
+    if report.has_sensitive_changes:
+        focus_lines.append("- Sensitive files changed.")
+    else:
+        focus_lines.append("- No sensitive files changed.")
+
+    return focus_lines
+
+
 def _build_markdown_risk_factor_lines(report: RiskReport) -> list[str]:
     if not report.risk_factors:
         return ["No risk factors detected."]
 
-    return [f"- {factor.label} `+{factor.points}`" for factor in report.risk_factors]
+    lines: list[str] = []
+
+    for factor in report.risk_factors:
+        lines.append(f"- {factor.label} `+{factor.points}`")
+
+    return lines
+
+
+def _build_markdown_risk_factor_table(report: RiskReport) -> list[str]:
+    if not report.risk_factors:
+        return ["No risk factors detected."]
+
+    lines = [
+        "| Factor | Points |",
+        "| --- | ---: |",
+    ]
+
+    for factor in report.risk_factors:
+        lines.append(f"| {factor.label} | +{factor.points} |")
+
+    return lines
 
 
 def _build_markdown_file_section(title: str, file_paths: list[str]) -> list[str]:
@@ -417,6 +512,16 @@ def _build_markdown_file_section(title: str, file_paths: list[str]) -> list[str]
 
     lines.append("")
     return lines
+
+
+def _format_count(count: int, singular: str, plural: str | None = None) -> str:
+    if count == 1:
+        return f"1 {singular}"
+
+    if plural is not None:
+        return f"{count} {plural}"
+
+    return f"{count} {singular}s"
 
 
 def _yes_no(value: bool) -> str:
