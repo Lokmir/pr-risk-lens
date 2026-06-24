@@ -429,3 +429,32 @@ def test_analyze_command_can_write_markdown_summary_to_file(
     assert "### Review focus" in content
     assert "### Key metrics" in content
     assert "## Changed files" not in content
+
+
+def test_markdown_summary_highlights_python_changes_without_tests(monkeypatch) -> None:
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["src/app.py"],
+        diff_stats=[
+            DiffStat(file_path="src/app.py", additions=1, deletions=0),
+        ],
+    )
+
+    result = runner.invoke(app, ["analyze", "--format", "markdown", "--summary"])
+    normalized_output = " ".join(result.output.split())
+
+    assert result.exit_code == 0
+    assert "## PR Risk Lens Summary" in result.output
+    assert "**Risk:** Low" in result.output
+    assert "**Score:** 25/100" in result.output
+    assert (
+        "Risk appears low, but check whether tests are needed "
+        "for the Python source change."
+    ) in normalized_output
+    assert (
+        "- Low-risk change with missing test signal: check whether tests are needed."
+    ) in normalized_output
+    assert (
+        "- No test file changes detected for Python source changes."
+    ) in result.output
+    assert "Python source changes without test changes `+10`" in result.output
