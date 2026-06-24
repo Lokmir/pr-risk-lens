@@ -242,3 +242,68 @@ def test_version_option_displays_installed_version(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert "PR Risk Lens 0.1.0" in result.output
+
+
+def test_analyze_command_can_output_markdown(monkeypatch) -> None:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return [
+            "README.md",
+            "src/pr_risk_lens/cli.py",
+            "tests/test_cli.py",
+        ]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [
+            DiffStat(file_path="README.md", additions=5, deletions=1),
+            DiffStat(file_path="src/pr_risk_lens/cli.py", additions=10, deletions=2),
+            DiffStat(file_path="tests/test_cli.py", additions=8, deletions=0),
+        ]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze", "--format", "markdown"])
+
+    assert result.exit_code == 0
+    assert "# PR Risk Lens Report" in result.output
+    assert "## Summary" in result.output
+    assert "- **Risk score:**" in result.output
+    assert "- `README.md`" in result.output
+    assert "- `tests/test_cli.py`" in result.output
+    assert "## Risk factors" in result.output
+
+
+def test_analyze_command_can_output_json_with_format_option(monkeypatch) -> None:
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return ["README.md"]
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return [DiffStat(file_path="README.md", additions=5, deletions=1)]
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+
+    result = runner.invoke(app, ["analyze", "--format", "json"])
+
+    assert result.exit_code == 0
+    assert '"changed_files"' in result.output
+    assert '"risk"' in result.output
+
+
+def test_analyze_command_rejects_json_flag_with_format_option(monkeypatch) -> None:
+    result = runner.invoke(app, ["analyze", "--json", "--format", "markdown"])
+
+    assert result.exit_code == 2
+    assert "Use either --json or --format, not both." in result.output

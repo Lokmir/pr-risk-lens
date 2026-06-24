@@ -1,4 +1,5 @@
 import json
+from enum import StrEnum
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_package_version
 
@@ -11,6 +12,13 @@ from pr_risk_lens.report import RiskReport, build_risk_report
 PACKAGE_NAME = "pr-risk-lens"
 APP_NAME = "PR Risk Lens"
 
+
+class OutputFormat(StrEnum):
+    text = "text"
+    json = "json"
+    markdown = "markdown"
+
+
 app = typer.Typer(
     help="Transparent risk scoring for Python pull requests.",
     no_args_is_help=True,
@@ -18,6 +26,12 @@ app = typer.Typer(
 )
 
 console = Console()
+
+OUTPUT_FORMAT_OPTION = typer.Option(
+    OutputFormat.text,
+    "--format",
+    help="Output format: text, json, or markdown.",
+)
 
 
 @app.callback()
@@ -44,10 +58,11 @@ def analyze(
         "--base",
         help="Compare the current branch against a base ref, for example main.",
     ),
+    output_format: OutputFormat = OUTPUT_FORMAT_OPTION,
     json_output: bool = typer.Option(
         False,
         "--json",
-        help="Output the report as JSON.",
+        help="Output the report as JSON. Kept for backwards compatibility.",
     ),
     max_score: int | None = typer.Option(
         None,
@@ -58,6 +73,11 @@ def analyze(
     """
     Analyze Git changes and print a risk report.
     """
+    output_format = _resolve_output_format(
+        output_format=output_format,
+        json_output=json_output,
+    )
+
     try:
         changed_files = get_changed_files(base_ref=base)
         diff_stats = get_diff_stats(base_ref=base)
@@ -67,16 +87,31 @@ def analyze(
 
     report = build_risk_report(changed_files, diff_stats)
 
-    if json_output:
-        _print_json_report(report)
-    else:
-        _print_text_report(report, base_ref=base)
+    _print_report(
+        report=report,
+        base_ref=base,
+        output_format=output_format,
+    )
 
     _exit_if_score_is_too_high(
         report=report,
         max_score=max_score,
-        json_output=json_output,
+        output_format=output_format,
     )
+
+
+def _resolve_output_format(
+    output_format: OutputFormat,
+    json_output: bool,
+) -> OutputFormat:
+    if json_output and output_format != OutputFormat.text:
+        console.print("[red]Error:[/red] Use either --json or --format, not both.")
+        raise typer.Exit(code=2)
+
+    if json_output:
+        return OutputFormat.json
+
+    return output_format
 
 
 def _get_installed_version() -> str:
@@ -86,8 +121,109 @@ def _get_installed_version() -> str:
         return "unknown"
 
 
+def _print_report(
+    report: RiskReport,
+    base_ref: str | None,
+    output_format: OutputFormat,
+) -> None:
+    if output_format == OutputFormat.json:
+        _print_json_report(report)
+        return
+
+    if output_format == OutputFormat.markdown:
+        _print_markdown_report(report, base_ref=base_ref)
+        return
+
+    _print_text_report(report, base_ref=base_ref)
+
+
 def _print_json_report(report: RiskReport) -> None:
     console.print(json.dumps(report.to_dict(), indent=2))
+
+
+def _print_markdown_report(report: RiskReport, base_ref: str | None = None) -> None:
+    console.print(_build_markdown_report(report, base_ref=base_ref), markup=False)
+
+
+def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> str:
+    lines: list[str] = [
+        "# PR Risk Lens Report",
+        "",
+        "Transparent risk scoring for Python pull requests.",
+        "",
+        "## Mode",
+        "",
+    ]
+
+    if base_ref:
+        lines.append(f"Branch comparison against `{base_ref}`.")
+    else:
+        lines.append("Local working tree.")
+
+    lines.extend(
+        [
+            "",
+            "## Summary",
+            "",
+            f"- **Risk score:** {report.risk_score}/100",
+            f"- **Risk level:** {report.risk_level}",
+            f"- **Changed files:** {len(report.changed_files)}",
+            f"- **Lines added:** {report.total_additions}",
+            f"- **Lines deleted:** {report.total_deletions}",
+            f"- **Test files changed:** {_yes_no(report.has_test_changes)}",
+            f"- **Sensitive files changed:** {_yes_no(report.has_sensitive_changes)}",
+            "",
+        ]
+    )
+
+    lines.extend(_build_markdown_file_section("Changed files", report.changed_files))
+    lines.extend(_build_markdown_file_section("Test files", report.test_files))
+    lines.extend(
+        _build_markdown_file_section("Sensitive files", report.sensitive_files)
+    )
+
+    lines.extend(
+        [
+            "## Risk factors",
+            "",
+        ]
+    )
+
+    if report.risk_factors:
+        for factor in report.risk_factors:
+            lines.append(f"- {factor.label} `+{factor.points}`")
+    else:
+        lines.append("No risk factors detected.")
+
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _build_markdown_file_section(title: str, file_paths: list[str]) -> list[str]:
+    lines = [
+        f"## {title}",
+        "",
+    ]
+
+    if not file_paths:
+        lines.extend(
+            [
+                "None.",
+                "",
+            ]
+        )
+        return lines
+
+    for file_path in file_paths:
+        lines.append(f"- `{file_path}`")
+
+    lines.append("")
+    return lines
+
+
+def _yes_no(value: bool) -> str:
+    return "Yes" if value else "No"
 
 
 def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
@@ -147,7 +283,7 @@ def _print_text_report(report: RiskReport, base_ref: str | None = None) -> None:
 def _exit_if_score_is_too_high(
     report: RiskReport,
     max_score: int | None,
-    json_output: bool,
+    output_format: OutputFormat,
 ) -> None:
     if max_score is None:
         return
@@ -155,7 +291,7 @@ def _exit_if_score_is_too_high(
     if report.risk_score <= max_score:
         return
 
-    if not json_output:
+    if output_format == OutputFormat.text:
         console.print()
         console.print(
             f"[red]Risk score {report.risk_score} exceeds max score {max_score}.[/red]"
