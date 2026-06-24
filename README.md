@@ -157,6 +157,59 @@ The legacy `--json` flag is still supported for backwards compatibility:
 ```powershell
 pr-risk-lens analyze --json
 ```
+
+## GitHub Actions Markdown report example
+
+PR Risk Lens can generate a Markdown report in CI.
+
+This is useful when you want to keep the risk report as a workflow artifact.
+
+```yaml
+name: PR Risk Lens Report
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  risk-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PR Risk Lens
+        run: python -m pip install -e .
+
+      - name: Generate Markdown risk report
+        run: |
+          pr-risk-lens analyze \
+            --base origin/main \
+            --format markdown \
+            > pr-risk-report.md
+
+      - name: Upload risk report
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-risk-report
+          path: pr-risk-report.md
+```
+
+This workflow:
+
+* compares the pull request branch against `origin/main`;
+* generates a Markdown report;
+* stores the report as a downloadable GitHub Actions artifact.
+
 ### Markdown output example
 
 ```markdown

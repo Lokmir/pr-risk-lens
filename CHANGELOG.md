@@ -8,6 +8,7 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 * Markdown output format with `pr-risk-lens analyze --format markdown`.
 * Structured output format option with `--format text`, `--format json`, and `--format markdown`.
+* GitHub Actions example for generating a Markdown risk report artifact.
 
 ### Changed
 
