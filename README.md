@@ -19,7 +19,7 @@ pr-risk-lens --version
 Example output:
 
 ```text
-PR Risk Lens 0.1.0
+PR Risk Lens 0.2.0
 ```
 
 ## Current status

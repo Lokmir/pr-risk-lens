@@ -4,12 +4,25 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+## v0.2.0 - 2026-06-24
 
 ### Added
 
-* Ruff linting and formatting configuration.
-* Ruff checks in GitHub Actions.
-* CLI version option with pr-risk-lens --version.
+- Ruff linting and formatting configuration.
+- Ruff checks in GitHub Actions.
+- Package build verification in GitHub Actions.
+- Installed CLI smoke test in GitHub Actions.
+- CLI version option with `pr-risk-lens --version`.
+- `CHANGELOG.md`.
+- `CONTRIBUTING.md`.
+- Package build metadata for future PyPI publishing.
+- Package metadata validation with `twine check`.
+
+### Changed
+
+- Updated README with version command documentation.
+- Improved CI workflow to validate linting, formatting, tests, package build, package metadata, and installed CLI behavior.
+
 
 ## v0.1.0 - 2026-06-23
 
