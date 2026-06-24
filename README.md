@@ -8,6 +8,20 @@ PR Risk Lens is a local-first CLI tool that analyzes Git changes and produces a 
 
 The goal is not to block developers with a black-box score. The goal is to make pull request risk easier to understand by showing clear factors such as changed files, line changes, test coverage signals, and sensitive file changes.
 
+## Version
+
+Display the installed version:
+
+```powershell
+pr-risk-lens --version
+```
+
+Example output:
+
+```text
+PR Risk Lens 0.1.0
+```
+
 ## Current status
 
 PR Risk Lens is currently an MVP.
