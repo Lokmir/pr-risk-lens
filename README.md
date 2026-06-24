@@ -8,25 +8,15 @@ PR Risk Lens is a local-first CLI tool that analyzes Git changes and produces a 
 
 The goal is not to block developers with a black-box score. The goal is to make pull request risk easier to understand by showing clear factors such as changed files, line changes, test coverage signals, and sensitive file changes.
 
-## Version
+## Project links
 
-Display the installed version:
+- [Changelog](CHANGELOG.md)
+- [Contributing guide](CONTRIBUTING.md)
+- [Releases](https://github.com/Lokmir/pr-risk-lens/releases)
 
-```powershell
-pr-risk-lens --version
-```
+## Features
 
-Example output:
-
-```text
-PR Risk Lens 0.2.0
-```
-
-## Current status
-
-PR Risk Lens is currently an MVP.
-
-It can:
+PR Risk Lens can:
 
 * analyze local Git working tree changes;
 * compare the current branch against a base branch;
@@ -35,9 +25,10 @@ It can:
 * detect test file changes;
 * detect risk-sensitive files;
 * compute a transparent risk score;
-* output a human-readable report;
-* output JSON;
-* exit with a non-zero code when the score exceeds a maximum threshold.
+* output text, JSON, or Markdown reports;
+* write reports to files;
+* fail with a non-zero exit code when the score exceeds a maximum threshold;
+* run in CI workflows.
 
 ## Installation for development
 
@@ -61,13 +52,15 @@ Install the project in editable mode with development dependencies:
 python -m pip install -e ".[dev]"
 ```
 
-Run the tests:
+Run the checks:
 
 ```powershell
+ruff check .
+ruff format --check .
 pytest
 ```
 
-## Usage
+## Quick start
 
 Analyze local working tree changes:
 
@@ -75,7 +68,37 @@ Analyze local working tree changes:
 pr-risk-lens analyze
 ```
 
-Example output:
+Compare the current branch against `main`:
+
+```powershell
+pr-risk-lens analyze --base main
+```
+
+Generate a Markdown report:
+
+```powershell
+pr-risk-lens analyze --format markdown
+```
+
+Write a Markdown report to a file:
+
+```powershell
+pr-risk-lens analyze --format markdown --output pr-risk-report.md
+```
+
+Fail when the risk score is above a threshold:
+
+```powershell
+pr-risk-lens analyze --base main --max-score 60
+```
+
+Show the installed version:
+
+```powershell
+pr-risk-lens --version
+```
+
+## Example text output
 
 ```text
 PR Risk Lens
@@ -108,48 +131,20 @@ Risk factors:
 - Files changed: 3 files (+5)
 ```
 
-## Compare against a base branch
-
-Analyze the current branch against a base reference:
-
-```powershell
-pr-risk-lens analyze --base main
-```
-
-This is useful when analyzing pull-request-like changes locally.
-
 ## Output formats
 
-PR Risk Lens supports multiple output formats.
+PR Risk Lens supports three output formats.
 
-Human-readable text output is the default:
+| Format   | Command                                  | Use case                           |
+| -------- | ---------------------------------------- | ---------------------------------- |
+| Text     | `pr-risk-lens analyze --format text`     | Human-readable terminal output     |
+| JSON     | `pr-risk-lens analyze --format json`     | Automation and scripts             |
+| Markdown | `pr-risk-lens analyze --format markdown` | CI reports, PR comments, artifacts |
+
+Text output is the default:
 
 ```powershell
 pr-risk-lens analyze
-```
-
-You can explicitly request text output:
-
-```powershell
-pr-risk-lens analyze --format text
-```
-
-JSON output is useful for automation:
-
-```powershell
-pr-risk-lens analyze --format json
-```
-
-Markdown output is useful for CI reports, pull request comments, or generated artifacts:
-
-```powershell
-pr-risk-lens analyze --format markdown
-```
-
-You can combine output formats with branch comparison:
-
-```powershell
-pr-risk-lens analyze --base main --format markdown
 ```
 
 The legacy `--json` flag is still supported for backwards compatibility:
@@ -158,59 +153,13 @@ The legacy `--json` flag is still supported for backwards compatibility:
 pr-risk-lens analyze --json
 ```
 
-## GitHub Actions Markdown report example
+You can write any format to a file:
 
-PR Risk Lens can generate a Markdown report in CI.
-
-This is useful when you want to keep the risk report as a workflow artifact.
-
-```yaml
-name: PR Risk Lens Report
-
-on:
-  pull_request:
-    branches:
-      - main
-
-jobs:
-  risk-report:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Install PR Risk Lens
-        run: python -m pip install -e .
-
-      - name: Generate Markdown risk report
-        run: |
-          pr-risk-lens analyze \
-            --base origin/main \
-            --format markdown \
-            > pr-risk-report.md
-
-      - name: Upload risk report
-        uses: actions/upload-artifact@v7
-        with:
-          name: pr-risk-report
-          path: pr-risk-report.md
+```powershell
+pr-risk-lens analyze --format markdown --output pr-risk-report.md
 ```
 
-This workflow:
-
-* compares the pull request branch against `origin/main`;
-* generates a Markdown report;
-* stores the report as a downloadable GitHub Actions artifact.
-
-### Markdown output example
+## Example Markdown output
 
 ```markdown
 # PR Risk Lens Report
@@ -243,42 +192,11 @@ Branch comparison against `main`.
 - Files changed: 3 files `+5`
 ```
 
-## Maximum score threshold
+## CI usage
 
-PR Risk Lens can fail the command when the risk score is greater than a chosen threshold:
+PR Risk Lens can be used in GitHub Actions to analyze pull-request-like changes.
 
-```powershell
-pr-risk-lens analyze --max-score 60
-```
-
-This is useful in CI because a non-zero exit code can fail a workflow.
-
-You can combine it with branch comparison:
-
-```powershell
-pr-risk-lens analyze --base main --max-score 60
-```
-
-Behavior:
-
-* if the risk score is less than or equal to the threshold, the command exits with code `0`;
-* if the risk score is greater than the threshold, the command exits with code `1`.
-
-Example:
-
-```text
-Risk:
-Risk score: 75/100
-Risk level: High
-
-Risk score 75 exceeds max score 60.
-```
-
-## CI example
-
-PR Risk Lens can be used in GitHub Actions to fail a pull request when the risk score is above a chosen threshold.
-
-Example workflow:
+### Fail when risk is too high
 
 ```yaml
 name: PR Risk Lens
@@ -316,6 +234,77 @@ In this example:
 * `--max-score 60` fails the workflow if the risk score is greater than `60`;
 * `fetch-depth: 0` gives Git enough history to compare branches correctly.
 
+### Generate a Markdown report artifact
+
+```yaml
+name: PR Risk Lens Report
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  risk-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install PR Risk Lens
+        run: python -m pip install -e .
+
+      - name: Generate Markdown risk report
+        run: |
+          pr-risk-lens analyze \
+            --base origin/main \
+            --format markdown \
+            --output pr-risk-report.md
+
+      - name: Upload risk report
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-risk-report
+          path: pr-risk-report.md
+```
+
+This workflow:
+
+* compares the pull request branch against `origin/main`;
+* generates a Markdown report;
+* stores the report as a downloadable GitHub Actions artifact.
+
+## Maximum score threshold
+
+PR Risk Lens can fail the command when the risk score is greater than a chosen threshold:
+
+```powershell
+pr-risk-lens analyze --max-score 60
+```
+
+Behavior:
+
+* if the risk score is less than or equal to the threshold, the command exits with code `0`;
+* if the risk score is greater than the threshold, the command exits with code `1`.
+
+Example:
+
+```text
+Risk:
+Risk score: 75/100
+Risk level: High
+
+Risk score 75 exceeds max score 60.
+```
+
 ## Risk scoring
 
 The score is intentionally simple and transparent.
@@ -342,7 +331,9 @@ Risk levels:
 |     31 to 60 | Medium |
 | 61 and above | High   |
 
-## Test file detection
+## Detection rules
+
+### Test files
 
 A file is considered a test file when:
 
@@ -358,7 +349,7 @@ test_report.py
 report_test.py
 ```
 
-## Sensitive file detection
+### Risk-sensitive files
 
 The following files are currently considered risk-sensitive:
 
@@ -406,34 +397,34 @@ Git output is normalized to keep reports stable:
 
 ## Development
 
-Run all tests:
+Run all checks locally:
 
 ```powershell
+ruff check .
+ruff format --check .
 pytest
 ```
 
-Run the CLI locally:
+Automatically fix supported Ruff issues:
 
 ```powershell
-pr-risk-lens analyze
+ruff check . --fix
+ruff format .
 ```
 
-Run JSON output:
+Build the package:
 
 ```powershell
-pr-risk-lens analyze --json
+python -m build
+twine check dist/*
 ```
 
-Run branch comparison:
+Clean generated build files:
 
 ```powershell
-pr-risk-lens analyze --base main
-```
-
-Run threshold mode:
-
-```powershell
-pr-risk-lens analyze --max-score 60
+Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force src/pr_risk_lens.egg-info -ErrorAction SilentlyContinue
 ```
 
 ## Project philosophy
@@ -447,7 +438,7 @@ PR Risk Lens should stay:
 * useful in CI;
 * understandable without AI or external services.
 
-AI may be explored later, but the MVP is deliberately deterministic and rule-based.
+AI may be explored later, but the core scoring should remain deterministic and rule-based.
 
 ## License
 
