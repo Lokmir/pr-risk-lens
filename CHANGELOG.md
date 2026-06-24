@@ -4,6 +4,21 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+## v0.4.0 - 2026-06-24
+
+### Added
+
+* Added line analysis from Git diffs.
+* Risky keyword detection in added lines.
+* Risky keyword matches in JSON output.
+* Risky keyword matches in Markdown summaries and full Markdown reports.
+* Review guidance for risky keyword matches.
+
+### Changed
+
+* Markdown summaries now highlight risky keyword matches as review signals.
+* Full Markdown reports now include a detailed risky keyword matches section.
+
 ## v0.3.2 - 2026-06-24
 
 ### Added

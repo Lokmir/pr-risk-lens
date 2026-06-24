@@ -30,6 +30,7 @@ PR Risk Lens can:
 * fail with a non-zero exit code when the score exceeds a maximum threshold;
 * run in CI workflows;
 * generate Markdown summaries suitable for pull request comments.
+* detect risky keywords in added lines;
 
 ## Installation for development
 
@@ -581,8 +582,37 @@ docker-compose.yaml
 .github/workflows/*.yml
 .github/workflows/*.yaml
 ```
-
 Changing these files adds risk because they may affect packaging, dependencies, CI, or runtime behavior.
+
+### Risky keywords
+
+PR Risk Lens can detect risky keywords in added lines.
+
+This helps reviewers quickly notice changes that may deserve extra attention, such as secrets, authentication values, unsafe execution patterns, or unfinished work markers.
+
+Current risky keyword patterns include:
+
+```text
+password
+secret
+token
+api_key
+private_key
+eval(
+exec(
+shell=True
+verify=False
+TODO
+FIXME
+```
+Risky keyword matches are shown in JSON output, Markdown summaries, and full Markdown reports.
+
+Example:
+
+### Risky keyword matches
+
+- `password` in `src/auth.py:12` `+10`
+
 
 ## Git behavior
 

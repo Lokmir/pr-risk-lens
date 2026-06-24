@@ -10,6 +10,13 @@ class DiffStat:
     deletions: int
 
 
+@dataclass(frozen=True)
+class AddedLine:
+    file_path: str
+    line_number: int
+    content: str
+
+
 class GitCommandError(RuntimeError):
     """
     Raised when a Git command cannot be executed successfully.
@@ -58,6 +65,26 @@ def get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
     ]
 
     return _merge_and_sort_diff_stats(tracked_stats + untracked_stats)
+
+
+def get_added_lines(base_ref: str | None = None) -> list[AddedLine]:
+    """
+    Return added lines from Git changes.
+
+    Without base_ref:
+    - parse tracked changes from git diff HEAD
+    - include readable untracked text files
+
+    With base_ref:
+    - parse added lines from git diff base...HEAD
+    """
+    if base_ref:
+        return _get_added_lines_against_base(base_ref)
+
+    tracked_lines = _get_tracked_added_lines_from_working_tree()
+    untracked_lines = _get_untracked_added_lines()
+
+    return _sort_added_lines(tracked_lines + untracked_lines)
 
 
 def _get_changed_files_from_working_tree() -> list[str]:
@@ -269,3 +296,111 @@ def _parse_numstat_number(value: str) -> int:
         return 0
 
     return int(value)
+
+
+def _get_tracked_added_lines_from_working_tree() -> list[AddedLine]:
+    result = _run_git(["git", "diff", "--unified=0", "--find-renames", "HEAD"])
+    return _parse_unified_diff_added_lines(result.stdout)
+
+
+def _get_added_lines_against_base(base_ref: str) -> list[AddedLine]:
+    result = _run_git(
+        ["git", "diff", "--unified=0", "--find-renames", f"{base_ref}...HEAD"]
+    )
+    return _parse_unified_diff_added_lines(result.stdout)
+
+
+def _get_untracked_added_lines() -> list[AddedLine]:
+    added_lines: list[AddedLine] = []
+
+    for file_path in _get_untracked_files():
+        added_lines.extend(_build_untracked_added_lines(file_path))
+
+    return added_lines
+
+
+def _build_untracked_added_lines(file_path: str) -> list[AddedLine]:
+    path = Path(file_path)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+    except OSError:
+        return []
+
+    return [
+        AddedLine(
+            file_path=file_path,
+            line_number=line_number,
+            content=line,
+        )
+        for line_number, line in enumerate(content.splitlines(), start=1)
+    ]
+
+
+def _parse_unified_diff_added_lines(output: str) -> list[AddedLine]:
+    added_lines: list[AddedLine] = []
+    current_file: str | None = None
+    current_line_number: int | None = None
+
+    for line in output.splitlines():
+        if line.startswith("+++ "):
+            current_file = _parse_diff_new_file_path(line)
+            continue
+
+        if line.startswith("@@ "):
+            current_line_number = _parse_hunk_new_start(line)
+            continue
+
+        if current_file is None or current_line_number is None:
+            continue
+
+        if line.startswith("+") and not line.startswith("+++ "):
+            added_lines.append(
+                AddedLine(
+                    file_path=current_file,
+                    line_number=current_line_number,
+                    content=line[1:],
+                )
+            )
+            current_line_number += 1
+            continue
+
+        if line.startswith("-") and not line.startswith("--- "):
+            continue
+
+        current_line_number += 1
+
+    return _sort_added_lines(added_lines)
+
+
+def _parse_diff_new_file_path(line: str) -> str | None:
+    file_path = line.removeprefix("+++ ").strip()
+
+    if file_path == "/dev/null":
+        return None
+
+    if file_path.startswith("b/"):
+        return file_path[2:]
+
+    return file_path
+
+
+def _parse_hunk_new_start(line: str) -> int:
+    for part in line.split():
+        if part.startswith("+"):
+            return int(part[1:].split(",", maxsplit=1)[0])
+
+    return 0
+
+
+def _sort_added_lines(added_lines: list[AddedLine]) -> list[AddedLine]:
+    return sorted(
+        added_lines,
+        key=lambda added_line: (
+            added_line.file_path,
+            added_line.line_number,
+            added_line.content,
+        ),
+    )

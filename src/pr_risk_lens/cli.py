@@ -7,7 +7,12 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from pr_risk_lens.git import GitCommandError, get_changed_files, get_diff_stats
+from pr_risk_lens.git import (
+    GitCommandError,
+    get_added_lines,
+    get_changed_files,
+    get_diff_stats,
+)
 from pr_risk_lens.report import RiskReport, build_risk_report
 
 PACKAGE_NAME = "pr-risk-lens"
@@ -98,11 +103,12 @@ def analyze(
     try:
         changed_files = get_changed_files(base_ref=base)
         diff_stats = get_diff_stats(base_ref=base)
+        added_lines = get_added_lines(base_ref=base)
     except GitCommandError as error:
         console.print(f"[red]Error:[/red] {error}")
         raise typer.Exit(code=2) from error
 
-    report = build_risk_report(changed_files, diff_stats)
+    report = build_risk_report(changed_files, diff_stats, added_lines)
 
     report_output = _build_report_output(
         report=report,
@@ -238,6 +244,17 @@ def _build_text_report(report: RiskReport, base_ref: str | None = None) -> str:
     for file_path in report.sensitive_files:
         lines.append(f"- {file_path}")
 
+        lines.extend(
+            [
+                "",
+                "Risky keyword matches:",
+                f"Risky keyword matches: {_yes_no(report.has_risky_keyword_matches)}",
+            ]
+        )
+
+    for match in report.risky_keyword_matches:
+        lines.append(f"- {match.keyword} in {match.file_path}:{match.line_number}")
+
     lines.extend(
         [
             "",
@@ -305,6 +322,8 @@ def _build_markdown_report(report: RiskReport, base_ref: str | None = None) -> s
     lines.extend(
         _build_markdown_file_section("Sensitive files", report.sensitive_files)
     )
+
+    lines.extend(_build_markdown_risky_keyword_section(report))
 
     lines.extend(
         [
@@ -378,6 +397,16 @@ def _build_markdown_summary_report(
     lines.extend(_build_markdown_risk_factor_lines(report))
     lines.append("")
 
+    if report.has_risky_keyword_matches:
+        lines.extend(
+            [
+                "### Risky keyword matches",
+                "",
+            ]
+        )
+        lines.extend(_build_markdown_risky_keyword_summary_lines(report))
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -404,6 +433,7 @@ def _build_markdown_summary_table(report: RiskReport) -> list[str]:
         f"| Lines changed | {report.total_changed_lines} |",
         f"| Test files changed | {_yes_no(report.has_test_changes)} |",
         f"| Sensitive files changed | {_yes_no(report.has_sensitive_changes)} |",
+        f"| Risky keyword matches | {len(report.risky_keyword_matches)} |",
         "",
     ]
 
@@ -416,6 +446,7 @@ def _build_markdown_compact_summary_table(report: RiskReport) -> list[str]:
         f"| Lines changed | {report.total_changed_lines} |",
         f"| Test files changed | {_yes_no(report.has_test_changes)} |",
         f"| Sensitive files changed | {_yes_no(report.has_sensitive_changes)} |",
+        f"| Risky keyword matches | {len(report.risky_keyword_matches)} |",
         "",
     ]
 
@@ -425,6 +456,8 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
         return "No changed files were detected."
 
     has_missing_test_signal = _has_python_source_without_test_changes(report)
+    has_sensitive_signal = report.has_sensitive_changes
+    has_risky_keyword_signal = report.has_risky_keyword_matches
 
     if report.risk_level == "High":
         return (
@@ -433,13 +466,35 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
         )
 
     if report.risk_level == "Medium":
-        if report.has_sensitive_changes and has_missing_test_signal:
+        if (
+            has_sensitive_signal
+            and has_missing_test_signal
+            and has_risky_keyword_signal
+        ):
+            return (
+                "Review the changed areas, sensitive file changes, risky keyword "
+                "matches, and whether focused tests should be added."
+            )
+
+        if has_sensitive_signal and has_missing_test_signal:
             return (
                 "Review the changed areas, sensitive file changes, "
                 "and whether focused tests should be added."
             )
 
-        if report.has_sensitive_changes:
+        if has_sensitive_signal and has_risky_keyword_signal:
+            return (
+                "Review the changed areas, sensitive file changes, "
+                "and risky keyword matches before merging."
+            )
+
+        if has_missing_test_signal and has_risky_keyword_signal:
+            return (
+                "Review the changed areas, risky keyword matches, "
+                "and whether focused tests should be added."
+            )
+
+        if has_sensitive_signal:
             return (
                 "Review the changed areas and sensitive file changes carefully "
                 "before merging."
@@ -451,16 +506,41 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
                 "Check whether focused tests should be added."
             )
 
+        if has_risky_keyword_signal:
+            return "Review the changed areas and risky keyword matches before merging."
+
         return "Review the changed areas and risk factors before merging."
 
     if report.risk_level == "Low":
-        if report.has_sensitive_changes and has_missing_test_signal:
+        if (
+            has_sensitive_signal
+            and has_missing_test_signal
+            and has_risky_keyword_signal
+        ):
+            return (
+                "Risk appears low, but review sensitive file changes, risky keyword "
+                "matches, and whether tests are needed."
+            )
+
+        if has_sensitive_signal and has_missing_test_signal:
             return (
                 "Risk appears low, but review sensitive file changes and check "
                 "whether tests are needed."
             )
 
-        if report.has_sensitive_changes:
+        if has_sensitive_signal and has_risky_keyword_signal:
+            return (
+                "Risk appears low, but review sensitive file changes and risky "
+                "keyword matches."
+            )
+
+        if has_missing_test_signal and has_risky_keyword_signal:
+            return (
+                "Risk appears low, but review risky keyword matches and check "
+                "whether tests are needed for the Python source change."
+            )
+
+        if has_sensitive_signal:
             return "Risk appears low, but review sensitive file changes carefully."
 
         if has_missing_test_signal:
@@ -469,9 +549,40 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
                 "for the Python source change."
             )
 
+        if has_risky_keyword_signal:
+            return "Risk appears low, but review risky keyword matches."
+
         return "Risk appears low, but review the listed changes normally."
 
     return "No meaningful risk factors were detected."
+
+
+def _build_review_signal_text(
+    has_sensitive_signal: bool,
+    has_missing_test_signal: bool,
+    has_risky_keyword_signal: bool,
+) -> str:
+    signals: list[str] = []
+
+    if has_sensitive_signal:
+        signals.append("sensitive file changes")
+
+    if has_missing_test_signal:
+        signals.append("whether focused tests should be added")
+
+    if has_risky_keyword_signal:
+        signals.append("risky keyword matches")
+
+    if not signals:
+        return ""
+
+    if len(signals) == 1:
+        return signals[0]
+
+    if len(signals) == 2:
+        return f"{signals[0]} and {signals[1]}"
+
+    return f"{signals[0]}, {signals[1]}, and {signals[2]}"
 
 
 def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
@@ -481,7 +592,11 @@ def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
     focus_lines: list[str] = []
     has_missing_test_signal = _has_python_source_without_test_changes(report)
 
-    if report.risk_level == "High":
+    if report.has_risky_keyword_matches:
+        focus_lines.append(
+            "- Risky keyword matches found: review the highlighted added lines."
+        )
+    elif report.risk_level == "High":
         focus_lines.append("- High-risk change: review carefully before merging.")
     elif report.risk_level == "Medium":
         if has_missing_test_signal:
@@ -549,6 +664,61 @@ def _build_markdown_risk_factor_table(report: RiskReport) -> list[str]:
         lines.append(f"| {factor.label} | +{factor.points} |")
 
     return lines
+
+
+def _build_markdown_risky_keyword_section(report: RiskReport) -> list[str]:
+    lines = [
+        "## Risky keyword matches",
+        "",
+    ]
+
+    if not report.risky_keyword_matches:
+        lines.extend(
+            [
+                "None.",
+                "",
+            ]
+        )
+        return lines
+
+    lines.extend(
+        [
+            "| Keyword | Location | Added line | Points |",
+            "| --- | --- | --- | ---: |",
+        ]
+    )
+
+    for match in report.risky_keyword_matches:
+        location = f"{match.file_path}:{match.line_number}"
+        lines.append(
+            "| "
+            f"`{match.keyword}` | "
+            f"`{location}` | "
+            f"`{_escape_markdown_table_cell(match.line_content)}` | "
+            f"+{match.points} |"
+        )
+
+    lines.append("")
+    return lines
+
+
+def _build_markdown_risky_keyword_summary_lines(report: RiskReport) -> list[str]:
+    lines: list[str] = []
+
+    for match in report.risky_keyword_matches[:5]:
+        location = f"{match.file_path}:{match.line_number}"
+        lines.append(f"- `{match.keyword}` in `{location}` `+{match.points}`")
+
+    remaining_match_count = len(report.risky_keyword_matches) - 5
+
+    if remaining_match_count > 0:
+        lines.append(f"- {remaining_match_count} more match(es) in the full report.")
+
+    return lines
+
+
+def _escape_markdown_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ").strip()
 
 
 def _build_markdown_file_section(title: str, file_paths: list[str]) -> list[str]:

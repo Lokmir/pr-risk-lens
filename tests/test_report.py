@@ -1,8 +1,10 @@
-from pr_risk_lens.git import DiffStat
+from pr_risk_lens.git import AddedLine, DiffStat
 from pr_risk_lens.report import (
     RiskFactor,
     RiskReport,
+    RiskyKeywordMatch,
     build_risk_report,
+    find_risky_keyword_matches,
     is_sensitive_file,
     is_test_file,
 )
@@ -44,6 +46,7 @@ def test_risk_report_knows_if_it_has_changes() -> None:
         sensitive_files=[],
         risk_factors=[],
         risk_score=0,
+        risky_keyword_matches=[],
     )
 
     assert report.has_changes is False
@@ -170,6 +173,7 @@ def test_risk_report_can_be_converted_to_dict() -> None:
             RiskFactor(label="Risk-sensitive files changed", points=10),
         ],
         risk_score=25,
+        risky_keyword_matches=[],
     )
 
     assert report.to_dict() == {
@@ -182,6 +186,7 @@ def test_risk_report_can_be_converted_to_dict() -> None:
             "has_sensitive_changes": True,
             "sensitive_files": ["pyproject.toml"],
         },
+        "risky_keyword_matches": [],
         "diff_stats": {
             "lines_added": 5,
             "lines_deleted": 2,
@@ -253,3 +258,68 @@ def test_risk_factor_labels_use_plural_words() -> None:
 
     assert "Change size: 4 changed lines" in labels
     assert "Files changed: 2 files" in labels
+
+
+def test_find_risky_keyword_matches_detects_supported_keywords() -> None:
+    matches = find_risky_keyword_matches(
+        [
+            AddedLine(
+                file_path="src/auth.py",
+                line_number=10,
+                content='password = "demo"',
+            ),
+            AddedLine(
+                file_path="src/config.py",
+                line_number=4,
+                content="verify=False",
+            ),
+        ]
+    )
+
+    assert matches == [
+        RiskyKeywordMatch(
+            keyword="password",
+            file_path="src/auth.py",
+            line_number=10,
+            line_content="<hidden>",
+            points=10,
+        ),
+        RiskyKeywordMatch(
+            keyword="verify=False",
+            file_path="src/config.py",
+            line_number=4,
+            line_content="<hidden>",
+            points=10,
+        ),
+    ]
+
+
+def test_build_risk_report_scores_risky_keyword_matches() -> None:
+    report = build_risk_report(
+        changed_files=["src/auth.py"],
+        diff_stats=[
+            DiffStat(file_path="src/auth.py", additions=1, deletions=0),
+        ],
+        added_lines=[
+            AddedLine(
+                file_path="src/auth.py",
+                line_number=1,
+                content='password = "demo"',
+            )
+        ],
+    )
+
+    assert report.risky_keyword_matches == [
+        RiskyKeywordMatch(
+            keyword="password",
+            file_path="src/auth.py",
+            line_number=1,
+            line_content="<hidden>",
+            points=10,
+        )
+    ]
+    assert RiskFactor(label="Risky keyword matches: 1 match", points=10) in (
+        report.risk_factors
+    )
+    assert report.risk_score == 35
+    assert report.risk_level == "Medium"

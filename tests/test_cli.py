@@ -3,7 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from pr_risk_lens.cli import app
-from pr_risk_lens.git import DiffStat, GitCommandError
+from pr_risk_lens.git import AddedLine, DiffStat, GitCommandError
 
 runner = CliRunner()
 
@@ -12,12 +12,19 @@ def _mock_git_changes(
     monkeypatch,
     changed_files: list[str],
     diff_stats: list[DiffStat],
+    added_lines: list[AddedLine] | None = None,
 ) -> None:
+    if added_lines is None:
+        added_lines = []
+
     def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
         return changed_files
 
     def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
         return diff_stats
+
+    def fake_get_added_lines(base_ref: str | None = None) -> list[AddedLine]:
+        return added_lines
 
     monkeypatch.setattr(
         "pr_risk_lens.cli.get_changed_files",
@@ -26,6 +33,10 @@ def _mock_git_changes(
     monkeypatch.setattr(
         "pr_risk_lens.cli.get_diff_stats",
         fake_get_diff_stats,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_added_lines",
+        fake_get_added_lines,
     )
 
 
@@ -483,3 +494,35 @@ def test_markdown_summary_highlights_sensitive_file_changes(monkeypatch) -> None
     ) in result.output
     assert "| Sensitive files changed | Yes |" in result.output
     assert "Risk-sensitive files changed `+10`" in result.output
+
+
+def _mock_git_changes(
+    monkeypatch,
+    changed_files: list[str],
+    diff_stats: list[DiffStat],
+    added_lines: list[AddedLine] | None = None,
+) -> None:
+    if added_lines is None:
+        added_lines = []
+
+    def fake_get_changed_files(base_ref: str | None = None) -> list[str]:
+        return changed_files
+
+    def fake_get_diff_stats(base_ref: str | None = None) -> list[DiffStat]:
+        return diff_stats
+
+    def fake_get_added_lines(base_ref: str | None = None) -> list[AddedLine]:
+        return added_lines
+
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_changed_files",
+        fake_get_changed_files,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_diff_stats",
+        fake_get_diff_stats,
+    )
+    monkeypatch.setattr(
+        "pr_risk_lens.cli.get_added_lines",
+        fake_get_added_lines,
+    )
