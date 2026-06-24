@@ -460,6 +460,12 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
     has_risky_keyword_signal = report.has_risky_keyword_matches
 
     if report.risk_level == "High":
+        if has_risky_keyword_signal:
+            return (
+                "Review carefully before merging. Pay particular attention to risky "
+                "keyword matches before considering the PR safe to merge."
+            )
+
         return (
             "Review carefully before merging. "
             "Consider splitting the change or adding focused tests."

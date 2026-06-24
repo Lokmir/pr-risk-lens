@@ -4,6 +4,16 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+## v0.4.1 - 2026-06-24
+
+### Changed
+
+* Improved high-risk Markdown guidance when risky keyword matches are detected.
+
+### Added
+
+* Added test coverage for high-risk Markdown summaries with risky keyword matches.
+
 ## v0.4.0 - 2026-06-24
 
 ### Added

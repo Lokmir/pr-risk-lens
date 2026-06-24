@@ -534,3 +534,30 @@ def _mock_git_changes(
         "pr_risk_lens.cli.get_added_lines",
         fake_get_added_lines,
     )
+
+
+def test_markdown_summary_high_risk_calls_out_risky_keyword_matches(
+    monkeypatch,
+) -> None:
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["src/auth.py"],
+        diff_stats=[
+            DiffStat(file_path="src/auth.py", additions=250, deletions=0),
+        ],
+        added_lines=[
+            AddedLine(
+                file_path="src/auth.py",
+                line_number=12,
+                content='password = "demo"',
+            ),
+        ],
+    )
+
+    result = runner.invoke(app, ["analyze", "--format", "markdown", "--summary"])
+    normalized_output = " ".join(result.output.split())
+
+    assert result.exit_code == 0
+    assert "**Risk:** High" in result.output
+    assert "Pay particular attention to risky keyword matches" in normalized_output
+    assert "`password` in `src/auth.py:12` `+10`" in result.output
