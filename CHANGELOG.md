@@ -4,10 +4,12 @@ All notable changes to PR Risk Lens will be documented in this file.
 
 ## Unreleased
 
+
 ### Added
 
 * Ruff linting and formatting configuration.
 * Ruff checks in GitHub Actions.
+* CLI version option with pr-risk-lens --version.
 
 ## v0.1.0 - 2026-06-23
 
