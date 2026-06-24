@@ -458,3 +458,28 @@ def test_markdown_summary_highlights_python_changes_without_tests(monkeypatch) -
         "- No test file changes detected for Python source changes."
     ) in result.output
     assert "Python source changes without test changes `+10`" in result.output
+
+
+def test_markdown_summary_highlights_sensitive_file_changes(monkeypatch) -> None:
+    _mock_git_changes(
+        monkeypatch=monkeypatch,
+        changed_files=["pyproject.toml"],
+        diff_stats=[
+            DiffStat(file_path="pyproject.toml", additions=3, deletions=0),
+        ],
+    )
+
+    result = runner.invoke(app, ["analyze", "--format", "markdown", "--summary"])
+
+    assert result.exit_code == 0
+    assert "## PR Risk Lens Summary" in result.output
+    assert "**Risk:** Low" in result.output
+    assert "**Score:** 25/100" in result.output
+    assert "Risk appears low, but review sensitive file changes carefully." in (
+        result.output
+    )
+    assert (
+        "- Sensitive files changed: review configuration, dependency, or CI impact."
+    ) in result.output
+    assert "| Sensitive files changed | Yes |" in result.output
+    assert "Risk-sensitive files changed `+10`" in result.output

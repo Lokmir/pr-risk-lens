@@ -433,6 +433,18 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
         )
 
     if report.risk_level == "Medium":
+        if report.has_sensitive_changes and has_missing_test_signal:
+            return (
+                "Review the changed areas, sensitive file changes, "
+                "and whether focused tests should be added."
+            )
+
+        if report.has_sensitive_changes:
+            return (
+                "Review the changed areas and sensitive file changes carefully "
+                "before merging."
+            )
+
         if has_missing_test_signal:
             return (
                 "Review the changed areas and risk factors before merging. "
@@ -442,6 +454,15 @@ def _build_markdown_review_guidance(report: RiskReport) -> str:
         return "Review the changed areas and risk factors before merging."
 
     if report.risk_level == "Low":
+        if report.has_sensitive_changes and has_missing_test_signal:
+            return (
+                "Risk appears low, but review sensitive file changes and check "
+                "whether tests are needed."
+            )
+
+        if report.has_sensitive_changes:
+            return "Risk appears low, but review sensitive file changes carefully."
+
         if has_missing_test_signal:
             return (
                 "Risk appears low, but check whether tests are needed "
@@ -494,7 +515,9 @@ def _build_markdown_review_focus_lines(report: RiskReport) -> list[str]:
         focus_lines.append("- No test file changes detected.")
 
     if report.has_sensitive_changes:
-        focus_lines.append("- Sensitive files changed.")
+        focus_lines.append(
+            "- Sensitive files changed: review configuration, dependency, or CI impact."
+        )
     else:
         focus_lines.append("- No sensitive files changed.")
 

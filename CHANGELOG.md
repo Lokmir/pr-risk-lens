@@ -18,6 +18,7 @@ All notable changes to PR Risk Lens will be documented in this file.
 * Improved full Markdown reports with a verdict, detailed summary table, risk factor table, and interpretation section.
 * Improved Markdown summaries with a compact decision-oriented layout.
 * Improved risk factor wording with singular and plural labels such as `1 file` and `2 files`.
+* Improved Markdown review guidance when sensitive files are changed.
 
 ## v0.3.1 - 2026-06-24
 
